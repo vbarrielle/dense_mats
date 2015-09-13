@@ -68,19 +68,22 @@ pub trait DenseMatView<N> {
     /// computed by i * strides[0] + j * strides[1]
     fn data(&self) -> &[N];
 
+    /// Give the index into self.data() for accessing the element
+    /// at row i and column j
+    fn data_index(&self, i: usize, j: usize) -> usize {
+        i * self.strides()[0] + j * self.strides()[1]
+    }
+}
+
+/// A mutable view into a dense matrix
+pub trait DenseMatViewMut<N> : DenseMatView<N> {
+
     /// Mutable access to the matrix's data
     /// 
     /// Getting access to the element located at row i and column j
     /// can be done by indexing self.data() at the location
     /// computed by i * strides[0] + j * strides[1]
     fn data_mut(&mut self) -> &mut [N];
-
-
-    /// Give the index into self.data() for accessing the element
-    /// at row i and column j
-    fn data_index(&self, i: usize, j: usize) -> usize {
-        i * self.strides()[0] + j * self.strides()[1]
-    }
 }
 
 /// Represents a dense matrix we own
