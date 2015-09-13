@@ -1,0 +1,13 @@
+language: rust
+
+script:
+    - rustc --version
+    - cargo --version
+    - cargo build --verbose
+    - cargo test --verbose
+
+notifications:
+  email:
+    - on_success: change
+    - on_failure: always
+
