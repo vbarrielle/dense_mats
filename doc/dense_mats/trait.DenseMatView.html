@@ -45,13 +45,12 @@
             <a id="toggle-all-docs" href="javascript:void(0)" title="collapse all docs">
                 [<span class='inner'>&#x2212;</span>]
             </a>
-        </span><a id='src-8' class='srclink' href='../src/dense_mats/lib.rs.html#23-84' title='goto source code'>[src]</a></span></h1>
+        </span><a id='src-8' class='srclink' href='../src/dense_mats/lib.rs.html#23-76' title='goto source code'>[src]</a></span></h1>
 <pre class='rust trait'>pub trait DenseMatView&lt;N&gt; {
     fn <a href='#tymethod.rows' class='fnname'>rows</a>(&amp;self) -&gt; <a href='http://doc.rust-lang.org/nightly/std/primitive.usize.html'>usize</a>;
     fn <a href='#tymethod.cols' class='fnname'>cols</a>(&amp;self) -&gt; <a href='http://doc.rust-lang.org/nightly/std/primitive.usize.html'>usize</a>;
     fn <a href='#tymethod.strides' class='fnname'>strides</a>(&amp;self) -&gt; <a href='http://doc.rust-lang.org/nightly/std/primitive.array.html'>[<a href='http://doc.rust-lang.org/nightly/std/primitive.usize.html'>usize</a>; 2]</a>;
     fn <a href='#tymethod.data' class='fnname'>data</a>(&amp;self) -&gt; <a href='http://doc.rust-lang.org/nightly/std/primitive.slice.html'>&amp;[</a>N<a href='http://doc.rust-lang.org/nightly/std/primitive.slice.html'>]</a>;
-    fn <a href='#tymethod.data_mut' class='fnname'>data_mut</a>(&amp;mut self) -&gt; <a href='http://doc.rust-lang.org/nightly/std/primitive.slice.html'>&amp;mut [</a>N<a href='http://doc.rust-lang.org/nightly/std/primitive.slice.html'>]</a>;
 
     fn <a href='#method.shape' class='fnname'>shape</a>(&amp;self) -&gt; <a href='http://doc.rust-lang.org/nightly/std/primitive.array.html'>[<a href='http://doc.rust-lang.org/nightly/std/primitive.usize.html'>usize</a>; 2]</a> { ... }
     fn <a href='#method.ordering' class='fnname'>ordering</a>(&amp;self) -&gt; <a class='enum' href='../dense_mats/enum.StorageOrder.html' title='dense_mats::StorageOrder'>StorageOrder</a> { ... }
@@ -78,11 +77,6 @@ the strides would be [4, 1].</p>
 the shape of the matrix (meaning that some elements of the data array
 are unused).</p>
 </div><h3 id='tymethod.data' class='method stab '><code>fn <a href='#tymethod.data' class='fnname'>data</a>(&amp;self) -&gt; <a href='http://doc.rust-lang.org/nightly/std/primitive.slice.html'>&amp;[</a>N<a href='http://doc.rust-lang.org/nightly/std/primitive.slice.html'>]</a></code></h3><div class='docblock'><p>Access to the matrix&#39;s data</p>
-
-<p>Getting access to the element located at row i and column j
-can be done by indexing self.data() at the location
-computed by i * strides[0] + j * strides[1]</p>
-</div><h3 id='tymethod.data_mut' class='method stab '><code>fn <a href='#tymethod.data_mut' class='fnname'>data_mut</a>(&amp;mut self) -&gt; <a href='http://doc.rust-lang.org/nightly/std/primitive.slice.html'>&amp;mut [</a>N<a href='http://doc.rust-lang.org/nightly/std/primitive.slice.html'>]</a></code></h3><div class='docblock'><p>Mutable access to the matrix&#39;s data</p>
 
 <p>Getting access to the element located at row i and column j
 can be done by indexing self.data() at the location

@@ -1,1 +1,1 @@
-initSidebarItems({"enum":[["StorageOrder","Describe the storage order of a matrix."]],"trait":[["DenseMatOwned","Represents a dense matrix we own"],["DenseMatView","Represents a view into a dense matrix"]]});
+initSidebarItems({"enum":[["StorageOrder","Describe the storage order of a matrix."]],"trait":[["DenseMatOwned","Represents a dense matrix we own"],["DenseMatView","Represents a view into a dense matrix"],["DenseMatViewMut","A mutable view into a dense matrix"]]});

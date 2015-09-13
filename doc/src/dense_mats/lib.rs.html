@@ -134,6 +134,9 @@
 <span id="92">92</span>
 <span id="93">93</span>
 <span id="94">94</span>
+<span id="95">95</span>
+<span id="96">96</span>
+<span id="97">97</span>
 </pre><pre class='rust '>
 <span class='doccomment'>/*!
 
@@ -205,19 +208,22 @@ major order.
     <span class='doccomment'>/// computed by i * strides[0] + j * strides[1]</span>
     <span class='kw'>fn</span> <span class='ident'>data</span>(<span class='kw-2'>&amp;</span><span class='self'>self</span>) <span class='op'>-&gt;</span> <span class='kw-2'>&amp;</span>[<span class='ident'>N</span>];
 
+    <span class='doccomment'>/// Give the index into self.data() for accessing the element</span>
+    <span class='doccomment'>/// at row i and column j</span>
+    <span class='kw'>fn</span> <span class='ident'>data_index</span>(<span class='kw-2'>&amp;</span><span class='self'>self</span>, <span class='ident'>i</span>: <span class='ident'>usize</span>, <span class='ident'>j</span>: <span class='ident'>usize</span>) <span class='op'>-&gt;</span> <span class='ident'>usize</span> {
+        <span class='ident'>i</span> <span class='op'>*</span> <span class='self'>self</span>.<span class='ident'>strides</span>()[<span class='number'>0</span>] <span class='op'>+</span> <span class='ident'>j</span> <span class='op'>*</span> <span class='self'>self</span>.<span class='ident'>strides</span>()[<span class='number'>1</span>]
+    }
+}
+
+<span class='doccomment'>/// A mutable view into a dense matrix</span>
+<span class='kw'>pub</span> <span class='kw'>trait</span> <span class='ident'>DenseMatViewMut</span><span class='op'>&lt;</span><span class='ident'>N</span><span class='op'>&gt;</span> : <span class='ident'>DenseMatView</span><span class='op'>&lt;</span><span class='ident'>N</span><span class='op'>&gt;</span> {
+
     <span class='doccomment'>/// Mutable access to the matrix&#39;s data</span>
     <span class='doccomment'>/// </span>
     <span class='doccomment'>/// Getting access to the element located at row i and column j</span>
     <span class='doccomment'>/// can be done by indexing self.data() at the location</span>
     <span class='doccomment'>/// computed by i * strides[0] + j * strides[1]</span>
     <span class='kw'>fn</span> <span class='ident'>data_mut</span>(<span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='self'>self</span>) <span class='op'>-&gt;</span> <span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> [<span class='ident'>N</span>];
-
-
-    <span class='doccomment'>/// Give the index into self.data() for accessing the element</span>
-    <span class='doccomment'>/// at row i and column j</span>
-    <span class='kw'>fn</span> <span class='ident'>data_index</span>(<span class='kw-2'>&amp;</span><span class='self'>self</span>, <span class='ident'>i</span>: <span class='ident'>usize</span>, <span class='ident'>j</span>: <span class='ident'>usize</span>) <span class='op'>-&gt;</span> <span class='ident'>usize</span> {
-        <span class='ident'>i</span> <span class='op'>*</span> <span class='self'>self</span>.<span class='ident'>strides</span>()[<span class='number'>0</span>] <span class='op'>+</span> <span class='ident'>j</span> <span class='op'>*</span> <span class='self'>self</span>.<span class='ident'>strides</span>()[<span class='number'>1</span>]
-    }
 }
 
 <span class='doccomment'>/// Represents a dense matrix we own</span>
