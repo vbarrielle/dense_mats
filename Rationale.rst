@@ -127,3 +127,9 @@ While some useful methods (indexing, iteration) could be provided automatically
 by the trait, I feel this would not be appropriate, as matrix library authors
 are probably in a better situation to implement these coherently with the rest
 of their API.
+
+The structure of these traits reminds me of the `AsRef`, `AsMut` and `From`
+traits of the standard library. However, I'm unsure the `AsRef` trait could be
+used as a replacement of the `DenseMatView` trait: all implementations I have
+encountered target unsized types such as slices, but there's currently no way to
+have an unsize matrix type as far as I can tell.
