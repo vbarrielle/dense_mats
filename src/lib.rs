@@ -13,8 +13,8 @@ extern crate num;
 mod mat;
 pub mod errors;
 
-pub use mat::{StridedMat, StridedMatView, StridedMatViewMut, StridedMatOwned};
-pub use mat::{StridedVec, StridedVecView, StridedVecViewMut, StridedVecOwned};
+pub use mat::{StridedMat, MatView, MatViewMut, MatOwned};
+pub use mat::{StridedVec, VecView, VecViewMut, VecOwned};
 
 /// Describe the storage order of a matrix.
 pub enum StorageOrder {

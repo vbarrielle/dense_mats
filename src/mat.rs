@@ -18,27 +18,14 @@ where Storage: Deref<Target=[N]> {
     strides: [usize; 2],
 }
 
-pub type StridedMatView<'a, N> = StridedMat<N, &'a [N]>;
-pub type StridedMatViewMut<'a, N> = StridedMat<N, &'a mut [N]>;
-pub type StridedMatOwned<N> = StridedMat<N, Vec<N>>;
-
-/// A simple dense vector
-#[derive(PartialEq, Debug)]
-pub struct StridedVec<N, Storage>
-where Storage: Deref<Target=[N]> {
-    data: Storage,
-    dim: usize,
-    stride: usize,
-}
-
-pub type StridedVecView<'a, N> = StridedVec<N, &'a [N]>;
-pub type StridedVecViewMut<'a, N> = StridedVec<N, &'a mut [N]>;
-pub type StridedVecOwned<N> = StridedVec<N, Vec<N>>;
+pub type MatView<'a, N> = StridedMat<N, &'a [N]>;
+pub type MatViewMut<'a, N> = StridedMat<N, &'a mut [N]>;
+pub type MatOwned<N> = StridedMat<N, Vec<N>>;
 
 impl<N> StridedMat<N, Vec<N>> {
     /// Create a dense matrix from owned data
     pub fn new_owned(data: Vec<N>, rows: usize,
-                     cols: usize, strides: [usize;2]) -> StridedMatOwned<N> {
+                     cols: usize, strides: [usize;2]) -> MatOwned<N> {
         StridedMat {
             data: data,
             rows: rows,
@@ -49,7 +36,7 @@ impl<N> StridedMat<N, Vec<N>> {
 
     /// Create an all-zero dense matrix
     pub fn zeros(rows: usize, cols: usize,
-                 order: StorageOrder) -> StridedMatOwned<N>
+                 order: StorageOrder) -> MatOwned<N>
     where N: Num + Copy {
         let strides = match order {
             StorageOrder::RowMaj => [cols, 1],
@@ -68,7 +55,7 @@ impl<'a, N> StridedMat<N, &'a [N]> {
 
     /// Create a view of a matrix implementing DenseMatView
     pub fn new_borrowed(data: &'a [N], rows: usize, cols: usize,
-                        strides: [usize; 2]) -> StridedMatView<'a, N>
+                        strides: [usize; 2]) -> MatView<'a, N>
     where N: 'a {
         StridedMat {
             data: data,
@@ -169,7 +156,7 @@ where Storage: Deref<Target=[N]> {
 
 
     /// Get a view into the specified row
-    pub fn row(&self, i: usize) -> Result<StridedVecView<N>, DMatError> {
+    pub fn row(&self, i: usize) -> Result<VecView<N>, DMatError> {
         if i >= self.rows {
             return Err(DMatError::OutOfBoundsIndex);
         }
@@ -185,7 +172,7 @@ where Storage: Deref<Target=[N]> {
     }
 
     /// Get a view into the specified column
-    pub fn col(&self, j: usize) -> Result<StridedVecView<N>, DMatError> {
+    pub fn col(&self, j: usize) -> Result<VecView<N>, DMatError> {
         if j >= self.cols {
             return Err(DMatError::OutOfBoundsIndex);
         }
@@ -213,7 +200,7 @@ where Storage: DerefMut<Target=[N]> {
     }
 
     /// Get a mutable view into the specified row
-    pub fn row_mut(&mut self, i: usize) -> Result<StridedVecViewMut<N>, DMatError> {
+    pub fn row_mut(&mut self, i: usize) -> Result<VecViewMut<N>, DMatError> {
         if i >= self.rows {
             return Err(DMatError::OutOfBoundsIndex);
         }
@@ -229,7 +216,8 @@ where Storage: DerefMut<Target=[N]> {
     }
 
     /// Get a mutable view into the specified column
-    pub fn col_mut(&mut self, j: usize) -> Result<StridedVecViewMut<N>, DMatError> {
+    pub fn col_mut(&mut self,
+                   j: usize) -> Result<VecViewMut<N>, DMatError> {
         if j >= self.cols {
             return Err(DMatError::OutOfBoundsIndex);
         }
@@ -254,6 +242,19 @@ impl<N> StridedMat<N, Vec<N>> {
 
 
 
+/// A simple dense vector
+#[derive(PartialEq, Debug)]
+pub struct StridedVec<N, Storage>
+where Storage: Deref<Target=[N]> {
+    data: Storage,
+    dim: usize,
+    stride: usize,
+}
+
+pub type VecView<'a, N> = StridedVec<N, &'a [N]>;
+pub type VecViewMut<'a, N> = StridedVec<N, &'a mut [N]>;
+pub type VecOwned<N> = StridedVec<N, Vec<N>>;
+
 fn take_first<N>(chunk: &[N]) -> &N {
     &chunk[0]
 }
@@ -261,6 +262,7 @@ fn take_first<N>(chunk: &[N]) -> &N {
 fn take_first_mut<N>(chunk: &mut [N]) -> &mut N {
     &mut chunk[0]
 }
+
 
 
 impl<N, Storage> StridedVec<N, Storage>
@@ -300,6 +302,25 @@ where Storage: DerefMut<Target=[N]> {
         &mut self.data[..]
     }
 }
+
+/// An iterator over non-overlapping blocks of a matrix,
+/// along the least-varying dimension
+pub struct ChunkOuterBlocks<'a, N: 'a> {
+    data: &'a [N],
+    rows: usize,
+    cols: usize,
+    strides: [usize; 2],
+    dims_in_bloc: usize,
+    bloc_count: usize
+}
+
+impl<'a, N: 'a> Iterator for ChunkOuterBlocks<'a, N> {
+    type Item = MatView<'a, N>;
+    fn next(&mut self) -> Option<<Self as Iterator>::Item> {
+        unimplemented!();
+    }
+}
+
 
 #[cfg(test)]
 mod tests {
