@@ -51,18 +51,48 @@ impl<N> StridedMat<N, Vec<N>> {
     }
 }
 
-impl<'a, N> StridedMat<N, &'a [N]> {
+impl<'a, N: 'a> StridedMat<N, &'a [N]> {
 
     /// Create a view of a matrix implementing DenseMatView
     pub fn new_borrowed(data: &'a [N], rows: usize, cols: usize,
-                        strides: [usize; 2]) -> MatView<'a, N>
-    where N: 'a {
+                        strides: [usize; 2]) -> MatView<'a, N> {
         StridedMat {
             data: data,
             rows: rows,
             cols: cols,
             strides: strides,
         }
+    }
+
+    /// Slice along the least varying dimension of the matrix, from
+    /// index `start` and taking `count` vectors.
+    /// 
+    /// e.g. for a row major matrix, get a view of `count` rows starting
+    /// from `start`.
+    pub fn middle_outer_views(&self,
+                              start: usize,
+                              count: usize
+                             ) -> Result<MatView<'a, N>, DMatError> {
+        let end = start + count;
+        if count == 0 {
+            return Err(DMatError::EmptyView);
+        }
+        if start >= self.outer_dims() || end > self.outer_dims() {
+            return Err(DMatError::OutOfBoundsIndex);
+        }
+        let (rows, cols) = match self.ordering() {
+            StorageOrder::RowMaj => (count, self.cols()),
+            StorageOrder::ColMaj => (self.rows(), count),
+        };
+
+        let s = self.outer_stride();
+        let sliced_data = &self.data[start * s .. end * s];
+        Ok(MatView {
+            data: sliced_data,
+            rows: rows,
+            cols: cols,
+            strides: self.strides,
+        })
     }
 }
 
@@ -77,6 +107,38 @@ where Storage: Deref<Target=[N]> {
     /// The number of cols of the matrix
     pub fn cols(&self) -> usize {
         self.cols
+    }
+
+    /// The number of least varying dimensions
+    pub fn outer_dims(&self) -> usize {
+        match self.ordering() {
+            StorageOrder::RowMaj => self.rows(),
+            StorageOrder::ColMaj => self.cols(),
+        }
+    }
+
+    /// The number of most varying dimensions
+    pub fn inner_dims(&self) -> usize {
+        match self.ordering() {
+            StorageOrder::RowMaj => self.cols(),
+            StorageOrder::ColMaj => self.rows(),
+        }
+    }
+
+    /// The stride for the outer dimension
+    pub fn outer_stride(&self) -> usize {
+        match self.ordering() {
+            StorageOrder::RowMaj => self.strides[0],
+            StorageOrder::ColMaj => self.strides[1],
+        }
+    }
+
+    /// The stride for the inner dimension
+    pub fn inner_stride(&self) -> usize {
+        match self.ordering() {
+            StorageOrder::RowMaj => self.strides[1],
+            StorageOrder::ColMaj => self.strides[0],
+        }
     }
 
     /// The strides of the matrix.
@@ -186,6 +248,7 @@ where Storage: Deref<Target=[N]> {
             stride: self.strides[0],
         })
     }
+
 }
 
 impl<N, Storage> StridedMat<N, Storage>
@@ -306,10 +369,7 @@ where Storage: DerefMut<Target=[N]> {
 /// An iterator over non-overlapping blocks of a matrix,
 /// along the least-varying dimension
 pub struct ChunkOuterBlocks<'a, N: 'a> {
-    data: &'a [N],
-    rows: usize,
-    cols: usize,
-    strides: [usize; 2],
+    mat: MatView<'a, N>,
     dims_in_bloc: usize,
     bloc_count: usize
 }
@@ -317,7 +377,22 @@ pub struct ChunkOuterBlocks<'a, N: 'a> {
 impl<'a, N: 'a> Iterator for ChunkOuterBlocks<'a, N> {
     type Item = MatView<'a, N>;
     fn next(&mut self) -> Option<<Self as Iterator>::Item> {
-        unimplemented!();
+        let end_dim = self.dims_in_bloc * (self.bloc_count + 1);
+        let count = if self.dims_in_bloc == 0 {
+            return None;
+        }
+        else if end_dim > self.mat.outer_dims() {
+            let count = self.mat.outer_dims() - self.dims_in_bloc;
+            self.dims_in_bloc = 0;
+            count
+        }
+        else {
+            self.dims_in_bloc
+        };
+        let view = self.mat.middle_outer_views(self.bloc_count,
+                                               count).unwrap();
+        self.bloc_count += 1;
+        Some(view)
     }
 }
 

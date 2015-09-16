@@ -11,6 +11,7 @@ pub enum DMatError {
     BadStorageType,
     NotImplemented,
     OutOfBoundsIndex,
+    EmptyView,
 }
 
 use self::DMatError::*;
@@ -25,6 +26,7 @@ impl DMatError {
             BadStorageType => "wrong storage type",
             NotImplemented => "this method is not yet implemented",
             OutOfBoundsIndex => "an element in indices is out of bounds",
+            EmptyView => "trying to create a view without elements",
         }
     }
 }
