@@ -10,3 +10,7 @@ license = "MIT"
 repository = "https://github.com/vbarrielle/dense_mats"
 documentation = "https://vbarrielle.github.io/dense_mats/doc/dense_mats/"
 keywords = ["matrix", "dense"]
+
+[dependencies]
+
+num = "*"
