@@ -45,16 +45,42 @@
             <a id="toggle-all-docs" href="javascript:void(0)" title="collapse all docs">
                 [<span class='inner'>&#x2212;</span>]
             </a>
-        </span><a id='src-0' class='srclink' href='../src/dense_mats/lib.rs.html#1-97' title='goto source code'>[src]</a></span></h1>
-<div class='docblock'><p>This crate contains traits to abstract over dense matrices.</p>
+        </span><a id='src-0' class='srclink' href='../src/dense_mats/lib.rs.html#1-25' title='goto source code'>[src]</a></span></h1>
+<div class='docblock'><p>This crate contains strided dense matrices implementations.</p>
 
-<p>The goal is to enable interoperability between various linear algebra
-libraries, by providing a common definition.</p>
-
-<p>Matrices are thus defined as a contiguous piece of memory, the data array,
+<p>Matrices are defined as a contiguous piece of memory, the data array,
 which is interpreted as a matrix stored in either column major order or row
 major order.</p>
-</div><h2 id='enums' class='section-header'><a href="#enums">Enums</a></h2>
+</div><h2 id='modules' class='section-header'><a href="#modules">Modules</a></h2>
+<table>
+                    <tr class=' module-item'>
+                        <td><a class='mod' href='errors/index.html'
+                               title='dense_mats::errors'>errors</a></td>
+                        <td class='docblock short'>
+                             <p>Error type for sprs</p>
+
+                        </td>
+                    </tr>
+                </table><h2 id='structs' class='section-header'><a href="#structs">Structs</a></h2>
+<table>
+                    <tr class=' module-item'>
+                        <td><a class='struct' href='struct.StridedMat.html'
+                               title='dense_mats::StridedMat'>StridedMat</a></td>
+                        <td class='docblock short'>
+                             <p>A simple dense matrix</p>
+
+                        </td>
+                    </tr>
+                
+                    <tr class=' module-item'>
+                        <td><a class='struct' href='struct.StridedVec.html'
+                               title='dense_mats::StridedVec'>StridedVec</a></td>
+                        <td class='docblock short'>
+                             <p>A simple dense vector</p>
+
+                        </td>
+                    </tr>
+                </table><h2 id='enums' class='section-header'><a href="#enums">Enums</a></h2>
 <table>
                     <tr class=' module-item'>
                         <td><a class='enum' href='enum.StorageOrder.html'
@@ -64,32 +90,53 @@ major order.</p>
 
                         </td>
                     </tr>
-                </table><h2 id='traits' class='section-header'><a href="#traits">Traits</a></h2>
+                </table><h2 id='types' class='section-header'><a href="#types">Type Definitions</a></h2>
 <table>
                     <tr class=' module-item'>
-                        <td><a class='trait' href='trait.DenseMatOwned.html'
-                               title='dense_mats::DenseMatOwned'>DenseMatOwned</a></td>
+                        <td><a class='type' href='type.StridedMatOwned.html'
+                               title='dense_mats::StridedMatOwned'>StridedMatOwned</a></td>
                         <td class='docblock short'>
-                             <p>Represents a dense matrix we own</p>
-
+                             
                         </td>
                     </tr>
                 
                     <tr class=' module-item'>
-                        <td><a class='trait' href='trait.DenseMatView.html'
-                               title='dense_mats::DenseMatView'>DenseMatView</a></td>
+                        <td><a class='type' href='type.StridedMatView.html'
+                               title='dense_mats::StridedMatView'>StridedMatView</a></td>
                         <td class='docblock short'>
-                             <p>Represents a view into a dense matrix</p>
-
+                             
                         </td>
                     </tr>
                 
                     <tr class=' module-item'>
-                        <td><a class='trait' href='trait.DenseMatViewMut.html'
-                               title='dense_mats::DenseMatViewMut'>DenseMatViewMut</a></td>
+                        <td><a class='type' href='type.StridedMatViewMut.html'
+                               title='dense_mats::StridedMatViewMut'>StridedMatViewMut</a></td>
                         <td class='docblock short'>
-                             <p>A mutable view into a dense matrix</p>
-
+                             
+                        </td>
+                    </tr>
+                
+                    <tr class=' module-item'>
+                        <td><a class='type' href='type.StridedVecOwned.html'
+                               title='dense_mats::StridedVecOwned'>StridedVecOwned</a></td>
+                        <td class='docblock short'>
+                             
+                        </td>
+                    </tr>
+                
+                    <tr class=' module-item'>
+                        <td><a class='type' href='type.StridedVecView.html'
+                               title='dense_mats::StridedVecView'>StridedVecView</a></td>
+                        <td class='docblock short'>
+                             
+                        </td>
+                    </tr>
+                
+                    <tr class=' module-item'>
+                        <td><a class='type' href='type.StridedVecViewMut.html'
+                               title='dense_mats::StridedVecViewMut'>StridedVecViewMut</a></td>
+                        <td class='docblock short'>
+                             
                         </td>
                     </tr>
                 </table></section>
