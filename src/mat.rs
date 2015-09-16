@@ -49,6 +49,28 @@ impl<N> StridedMat<N, Vec<N>> {
             strides: strides,
         }
     }
+
+    /// Return the identity matrix of dimension `dim`
+    /// 
+    /// The storage will be row major, however one can transpose if needed
+    pub fn eye(dim: usize) -> MatOwned<N>
+    where N: Num + Copy {
+        let data = (0..dim*dim).map(|x| {
+            if x % dim == x / dim { N::one() } else { N::zero() }
+        }).collect();
+        StridedMat {
+            data: data,
+            rows: dim,
+            cols: dim,
+            strides: [dim, 1],
+        }
+    }
+
+
+    /// Get the underlying data array as a vector
+    pub fn into_data(self) -> Vec<N> {
+        self.data
+    }
 }
 
 impl<'a, N: 'a> StridedMat<N, &'a [N]> {
@@ -249,6 +271,19 @@ where Storage: Deref<Target=[N]> {
         })
     }
 
+    pub fn outer_block_iter(&self, block_size: usize) -> ChunkOuterBlocks<N> {
+        let mat = MatView {
+            data: &self.data[..],
+            rows: self.rows,
+            cols: self.cols,
+            strides: self.strides,
+        };
+        ChunkOuterBlocks {
+            mat: mat,
+            dims_in_bloc: block_size,
+            bloc_count: 0,
+        }
+    }
 }
 
 impl<N, Storage> StridedMat<N, Storage>
@@ -295,14 +330,6 @@ where Storage: DerefMut<Target=[N]> {
         })
     }
 }
-
-impl<N> StridedMat<N, Vec<N>> {
-    /// Get the underlying data array as a vector
-    pub fn into_data(self) -> Vec<N> {
-        self.data
-    }
-}
-
 
 
 /// A simple dense vector
@@ -377,19 +404,20 @@ pub struct ChunkOuterBlocks<'a, N: 'a> {
 impl<'a, N: 'a> Iterator for ChunkOuterBlocks<'a, N> {
     type Item = MatView<'a, N>;
     fn next(&mut self) -> Option<<Self as Iterator>::Item> {
-        let end_dim = self.dims_in_bloc * (self.bloc_count + 1);
+        let cur_dim = self.dims_in_bloc * self.bloc_count;
+        let end_dim = self.dims_in_bloc + cur_dim;
         let count = if self.dims_in_bloc == 0 {
             return None;
         }
         else if end_dim > self.mat.outer_dims() {
-            let count = self.mat.outer_dims() - self.dims_in_bloc;
+            let count = self.mat.outer_dims() - cur_dim;
             self.dims_in_bloc = 0;
             count
         }
         else {
             self.dims_in_bloc
         };
-        let view = self.mat.middle_outer_views(self.bloc_count,
+        let view = self.mat.middle_outer_views(cur_dim,
                                                count).unwrap();
         self.bloc_count += 1;
         Some(view)
@@ -400,7 +428,7 @@ impl<'a, N: 'a> Iterator for ChunkOuterBlocks<'a, N> {
 #[cfg(test)]
 mod tests {
 
-    use super::{StridedMat};
+    use super::{StridedMat, MatOwned};
     use errors::DMatError;
 
     #[test]
@@ -525,5 +553,37 @@ mod tests {
         assert_eq!(iter.next(), Some(&1.));
         assert_eq!(iter.next(), Some(&0.));
         assert_eq!(iter.next(), None);
+    }
+
+    #[test]
+    fn eye() {
+        let mat: MatOwned<f64> = StridedMat::eye(3);
+        assert_eq!(mat.data(), &[1., 0., 0.,
+                                 0., 1., 0.,
+                                 0., 0., 1.]);
+    }
+
+    #[test]
+    fn outer_block_iter() {
+        let mat: MatOwned<f64> = StridedMat::eye(11);
+        let mut block_iter = mat.outer_block_iter(3);
+        assert_eq!(block_iter.next().unwrap().rows(), 3);
+        assert_eq!(block_iter.next().unwrap().rows(), 3);
+        assert_eq!(block_iter.next().unwrap().rows(), 3);
+        assert_eq!(block_iter.next().unwrap().rows(), 2);
+        assert_eq!(block_iter.next(), None);
+
+        let mut block_iter = mat.outer_block_iter(4);
+        assert_eq!(block_iter.next().unwrap().cols(), 11);
+        assert_eq!(block_iter.next().unwrap().strides()[0], 11);
+        assert_eq!(block_iter.next().unwrap().strides()[1], 1);
+        assert_eq!(block_iter.next(), None);
+
+        let mat: MatOwned<f64> = StridedMat::eye(3);
+        let mut block_iter = mat.outer_block_iter(2);
+        assert_eq!(block_iter.next().unwrap().data(), &[1., 0., 0.,
+                                                        0., 1., 0.]);
+        assert_eq!(block_iter.next().unwrap().data(), &[0., 0., 1.]);
+        assert_eq!(block_iter.next(), None);
     }
 }
