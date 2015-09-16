@@ -4,12 +4,9 @@ dense_mats
 .. image:: https://travis-ci.org/vbarrielle/dense_mats.svg?branch=master
     :target: https://travis-ci.org/vbarrielle/dense_mats
 
-dense_mats is a collection of traits to abstract over dense matrices
+dense_mats contains strided dense matrices implementations.
 
-The goal is to enable interoperability between various linear algebra
-libraries, by providing a common definition.
-
-Matrices are thus defined as a contiguous piece of memory, the data array,
+Matrices are defined as a contiguous piece of memory, the data array,
 which is interpreted as a matrix stored in either column major order or row
 major order.
 
