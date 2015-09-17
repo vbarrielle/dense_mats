@@ -1,0 +1,4 @@
+[package]
+name = "array_like"
+version = "0.1.0"
+authors = ["Vincent Barrielle <vincent.barrielle@m4x.org>"]

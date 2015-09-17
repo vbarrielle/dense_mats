@@ -5,32 +5,33 @@ use std::iter::Map;
 use std::slice::{Chunks, ChunksMut};
 use num::traits::Num;
 
+use array_like::ArrayLike;
+
 use errors::DMatError;
 use StorageOrder;
 
 /// A simple dense matrix
 #[derive(PartialEq, Debug)]
-pub struct StridedMat<N, Storage>
-where Storage: Deref<Target=[N]> {
+pub struct Tensor<N, DimArray, Storage>
+where Storage: Deref<Target=[N]>,
+      ArrayLike<DimArray>: Deref<Target=[usize]> + Copy {
     data: Storage,
-    rows: usize,
-    cols: usize,
-    strides: [usize; 2],
+    shape: ArrayLike<DimArray>,
+    strides: ArrayLike<DimArray>,
 }
 
-pub type MatView<'a, N> = StridedMat<N, &'a [N]>;
-pub type MatViewMut<'a, N> = StridedMat<N, &'a mut [N]>;
-pub type MatOwned<N> = StridedMat<N, Vec<N>>;
+pub type MatView<'a, N> = Tensor<N, [usize; 2], &'a [N]>;
+pub type MatViewMut<'a, N> = Tensor<N, [usize; 2], &'a mut [N]>;
+pub type MatOwned<N> = Tensor<N, [usize; 2], Vec<N>>;
 
-impl<N> StridedMat<N, Vec<N>> {
+impl<N> Tensor<N, [usize; 2], Vec<N>> {
     /// Create a dense matrix from owned data
     pub fn new_owned(data: Vec<N>, rows: usize,
                      cols: usize, strides: [usize;2]) -> MatOwned<N> {
-        StridedMat {
+        Tensor {
             data: data,
-            rows: rows,
-            cols: cols,
-            strides: strides,
+            shape: ArrayLike::new([rows, cols]),
+            strides: ArrayLike::new(strides),
         }
     }
 
@@ -42,11 +43,10 @@ impl<N> StridedMat<N, Vec<N>> {
             StorageOrder::RowMaj => [cols, 1],
             StorageOrder::ColMaj => [1, rows],
         };
-        StridedMat {
+        Tensor {
             data: vec![N::zero(); rows*cols],
-            rows: rows,
-            cols: cols,
-            strides: strides,
+            shape: ArrayLike::new([rows, cols]),
+            strides: ArrayLike::new(strides),
         }
     }
 
@@ -58,11 +58,10 @@ impl<N> StridedMat<N, Vec<N>> {
         let data = (0..dim*dim).map(|x| {
             if x % dim == x / dim { N::one() } else { N::zero() }
         }).collect();
-        StridedMat {
+        Tensor {
             data: data,
-            rows: dim,
-            cols: dim,
-            strides: [dim, 1],
+            shape: ArrayLike::new([dim, dim]),
+            strides: ArrayLike::new([dim, 1]),
         }
     }
 
@@ -73,16 +72,15 @@ impl<N> StridedMat<N, Vec<N>> {
     }
 }
 
-impl<'a, N: 'a> StridedMat<N, &'a [N]> {
+impl<'a, N: 'a> Tensor<N, [usize; 2], &'a [N]> {
 
     /// Create a view of a matrix implementing DenseMatView
     pub fn new_borrowed(data: &'a [N], rows: usize, cols: usize,
                         strides: [usize; 2]) -> MatView<'a, N> {
-        StridedMat {
+        Tensor {
             data: data,
-            rows: rows,
-            cols: cols,
-            strides: strides,
+            shape: ArrayLike::new([rows, cols]),
+            strides: ArrayLike::new(strides),
         }
     }
 
@@ -111,24 +109,23 @@ impl<'a, N: 'a> StridedMat<N, &'a [N]> {
         let sliced_data = &self.data[start * s .. end * s];
         Ok(MatView {
             data: sliced_data,
-            rows: rows,
-            cols: cols,
+            shape: ArrayLike::new([rows, cols]),
             strides: self.strides,
         })
     }
 }
 
-impl<N, Storage> StridedMat<N, Storage>
+impl<N, Storage> Tensor<N, [usize; 2], Storage>
 where Storage: Deref<Target=[N]> {
 
     /// The number of rows of the matrix
     pub fn rows(&self) -> usize {
-        self.rows
+        self.shape[0]
     }
 
     /// The number of cols of the matrix
     pub fn cols(&self) -> usize {
-        self.cols
+        self.shape[1]
     }
 
     /// The number of least varying dimensions
@@ -179,7 +176,7 @@ where Storage: Deref<Target=[N]> {
     /// the shape of the matrix (meaning that some elements of the data array
     /// are unused).
     pub fn strides(&self) -> [usize; 2] {
-        self.strides
+        self.strides.inner()
     }
 
     /// Access to the matrix's data
@@ -241,7 +238,7 @@ where Storage: Deref<Target=[N]> {
 
     /// Get a view into the specified row
     pub fn row(&self, i: usize) -> Result<VecView<N>, DMatError> {
-        if i >= self.rows {
+        if i >= self.rows() {
             return Err(DMatError::OutOfBoundsIndex);
         }
         let range = match self.ordering() {
@@ -250,14 +247,14 @@ where Storage: Deref<Target=[N]> {
         };
         Ok(StridedVec {
             data: &self.data[range],
-            dim: self.cols,
+            dim: self.cols(),
             stride: self.strides[1],
         })
     }
 
     /// Get a view into the specified column
     pub fn col(&self, j: usize) -> Result<VecView<N>, DMatError> {
-        if j >= self.cols {
+        if j >= self.cols() {
             return Err(DMatError::OutOfBoundsIndex);
         }
         let range = match self.ordering() {
@@ -266,7 +263,7 @@ where Storage: Deref<Target=[N]> {
         };
         Ok(StridedVec {
             data: &self.data[range],
-            dim: self.cols,
+            dim: self.cols(),
             stride: self.strides[0],
         })
     }
@@ -274,8 +271,7 @@ where Storage: Deref<Target=[N]> {
     pub fn outer_block_iter(&self, block_size: usize) -> ChunkOuterBlocks<N> {
         let mat = MatView {
             data: &self.data[..],
-            rows: self.rows,
-            cols: self.cols,
+            shape: ArrayLike::new([self.rows(), self.cols()]),
             strides: self.strides,
         };
         ChunkOuterBlocks {
@@ -286,7 +282,7 @@ where Storage: Deref<Target=[N]> {
     }
 }
 
-impl<N, Storage> StridedMat<N, Storage>
+impl<N, Storage> Tensor<N, [usize; 2], Storage>
 where Storage: DerefMut<Target=[N]> {
     /// Mutable access to the matrix's data
     ///
@@ -299,16 +295,17 @@ where Storage: DerefMut<Target=[N]> {
 
     /// Get a mutable view into the specified row
     pub fn row_mut(&mut self, i: usize) -> Result<VecViewMut<N>, DMatError> {
-        if i >= self.rows {
+        if i >= self.rows() {
             return Err(DMatError::OutOfBoundsIndex);
         }
         let range = match self.ordering() {
             StorageOrder::RowMaj => self.row_range_rowmaj(i),
             StorageOrder::ColMaj => self.row_range_colmaj(i),
         };
+        let dim = self.cols();
         Ok(StridedVec {
             data: &mut self.data[range],
-            dim: self.cols,
+            dim: dim,
             stride: self.strides[1],
         })
     }
@@ -316,16 +313,17 @@ where Storage: DerefMut<Target=[N]> {
     /// Get a mutable view into the specified column
     pub fn col_mut(&mut self,
                    j: usize) -> Result<VecViewMut<N>, DMatError> {
-        if j >= self.cols {
+        if j >= self.cols() {
             return Err(DMatError::OutOfBoundsIndex);
         }
         let range = match self.ordering() {
             StorageOrder::RowMaj => self.col_range_rowmaj(j),
             StorageOrder::ColMaj => self.col_range_colmaj(j),
         };
+        let dim = self.cols();
         Ok(StridedVec {
             data: &mut self.data[range],
-            dim: self.cols,
+            dim: dim,
             stride: self.strides[0],
         })
     }
@@ -428,13 +426,13 @@ impl<'a, N: 'a> Iterator for ChunkOuterBlocks<'a, N> {
 #[cfg(test)]
 mod tests {
 
-    use super::{StridedMat, MatOwned};
+    use super::{Tensor, MatOwned};
     use errors::DMatError;
 
     #[test]
     fn row_view() {
 
-        let mat = StridedMat::new_owned(vec![1., 1., 0., 0., 1., 0., 0., 0., 1.],
+        let mat = Tensor::new_owned(vec![1., 1., 0., 0., 1., 0., 0., 0., 1.],
                                   3, 3, [3, 1]);
         let view = mat.row(0).unwrap();
         assert_eq!(view.dim(), 3);
@@ -455,7 +453,7 @@ mod tests {
     #[test]
     fn col_view() {
 
-        let mat = StridedMat::new_owned(vec![1., 1., 0., 0., 1., 0., 0., 0., 1.],
+        let mat = Tensor::new_owned(vec![1., 1., 0., 0., 1., 0., 0., 0., 1.],
                                   3, 3, [3, 1]);
         let view = mat.col(0).unwrap();
         assert_eq!(view.dim(), 3);
@@ -475,7 +473,7 @@ mod tests {
 
     #[test]
     fn row_iter() {
-        let mat = StridedMat::new_owned(vec![1., 1., 0., 0., 1., 0., 0., 0., 1.],
+        let mat = Tensor::new_owned(vec![1., 1., 0., 0., 1., 0., 0., 0., 1.],
                                   3, 3, [1, 3]);
 
         {
@@ -516,7 +514,7 @@ mod tests {
 
     #[test]
     fn col_iter() {
-        let mat = StridedMat::new_owned(vec![1., 1., 0., 0., 1., 0., 0., 0., 1.],
+        let mat = Tensor::new_owned(vec![1., 1., 0., 0., 1., 0., 0., 0., 1.],
                                   3, 3, [1, 3]);
 
         {
@@ -557,7 +555,7 @@ mod tests {
 
     #[test]
     fn eye() {
-        let mat: MatOwned<f64> = StridedMat::eye(3);
+        let mat: MatOwned<f64> = Tensor::eye(3);
         assert_eq!(mat.data(), &[1., 0., 0.,
                                  0., 1., 0.,
                                  0., 0., 1.]);
@@ -565,7 +563,7 @@ mod tests {
 
     #[test]
     fn outer_block_iter() {
-        let mat: MatOwned<f64> = StridedMat::eye(11);
+        let mat: MatOwned<f64> = Tensor::eye(11);
         let mut block_iter = mat.outer_block_iter(3);
         assert_eq!(block_iter.next().unwrap().rows(), 3);
         assert_eq!(block_iter.next().unwrap().rows(), 3);
@@ -579,7 +577,7 @@ mod tests {
         assert_eq!(block_iter.next().unwrap().strides()[1], 1);
         assert_eq!(block_iter.next(), None);
 
-        let mat: MatOwned<f64> = StridedMat::eye(3);
+        let mat: MatOwned<f64> = Tensor::eye(3);
         let mut block_iter = mat.outer_block_iter(2);
         assert_eq!(block_iter.next().unwrap().data(), &[1., 0., 0.,
                                                         0., 1., 0.]);

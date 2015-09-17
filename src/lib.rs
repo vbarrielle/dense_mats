@@ -9,11 +9,12 @@ major order.
 */
 
 extern crate num;
+extern crate array_like;
 
 mod mat;
 pub mod errors;
 
-pub use mat::{StridedMat, MatView, MatViewMut, MatOwned};
+pub use mat::{Tensor, MatView, MatViewMut, MatOwned};
 pub use mat::{StridedVec, VecView, VecViewMut, VecOwned};
 
 /// Describe the storage order of a matrix.

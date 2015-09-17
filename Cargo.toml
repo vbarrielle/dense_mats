@@ -14,3 +14,8 @@ keywords = ["matrix", "dense", "stride"]
 [dependencies]
 
 num = "*"
+
+[dependencies.array_like]
+
+version = "*"
+path = "array_like"
