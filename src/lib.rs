@@ -15,7 +15,7 @@ mod mat;
 pub mod errors;
 
 pub use mat::{Tensor, MatView, MatViewMut, MatOwned};
-pub use mat::{StridedVec, VecView, VecViewMut, VecOwned};
+pub use mat::{VecView, VecViewMut, VecOwned};
 
 /// Describe the storage order of a matrix.
 pub enum StorageOrder {

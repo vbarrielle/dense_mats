@@ -1,3 +1,8 @@
+/*!
+This crate is a simple workaround around the fact that arrays don't
+implement Copy or Deref (even though in practice they are).
+This enables asking for arrays as a generic bound
+*/
 
 use std::ops::{Deref, DerefMut};
 

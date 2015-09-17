@@ -245,10 +245,10 @@ where Storage: Deref<Target=[N]> {
             StorageOrder::RowMaj => self.row_range_rowmaj(i),
             StorageOrder::ColMaj => self.row_range_colmaj(i),
         };
-        Ok(StridedVec {
+        Ok(Tensor {
             data: &self.data[range],
-            dim: self.cols(),
-            stride: self.strides[1],
+            shape: ArrayLike::new([self.cols()]),
+            strides: ArrayLike::new([self.strides[1]]),
         })
     }
 
@@ -261,10 +261,10 @@ where Storage: Deref<Target=[N]> {
             StorageOrder::RowMaj => self.col_range_rowmaj(j),
             StorageOrder::ColMaj => self.col_range_colmaj(j),
         };
-        Ok(StridedVec {
+        Ok(Tensor {
             data: &self.data[range],
-            dim: self.cols(),
-            stride: self.strides[0],
+            shape: ArrayLike::new([self.rows()]),
+            strides: ArrayLike::new([self.strides[0]]),
         })
     }
 
@@ -303,10 +303,10 @@ where Storage: DerefMut<Target=[N]> {
             StorageOrder::ColMaj => self.row_range_colmaj(i),
         };
         let dim = self.cols();
-        Ok(StridedVec {
+        Ok(Tensor {
             data: &mut self.data[range],
-            dim: dim,
-            stride: self.strides[1],
+            shape: ArrayLike::new([dim]),
+            strides: ArrayLike::new([self.strides[1]]),
         })
     }
 
@@ -321,27 +321,18 @@ where Storage: DerefMut<Target=[N]> {
             StorageOrder::ColMaj => self.col_range_colmaj(j),
         };
         let dim = self.cols();
-        Ok(StridedVec {
+        Ok(Tensor {
             data: &mut self.data[range],
-            dim: dim,
-            stride: self.strides[0],
+            shape: ArrayLike::new([dim]),
+            strides: ArrayLike::new([self.strides[0]]),
         })
     }
 }
 
 
-/// A simple dense vector
-#[derive(PartialEq, Debug)]
-pub struct StridedVec<N, Storage>
-where Storage: Deref<Target=[N]> {
-    data: Storage,
-    dim: usize,
-    stride: usize,
-}
-
-pub type VecView<'a, N> = StridedVec<N, &'a [N]>;
-pub type VecViewMut<'a, N> = StridedVec<N, &'a mut [N]>;
-pub type VecOwned<N> = StridedVec<N, Vec<N>>;
+pub type VecView<'a, N> = Tensor<N, [usize; 1], &'a [N]>;
+pub type VecViewMut<'a, N> = Tensor<N, [usize; 1], &'a mut [N]>;
+pub type VecOwned<N> = Tensor<N, [usize; 1], Vec<N>>;
 
 fn take_first<N>(chunk: &[N]) -> &N {
     &chunk[0]
@@ -353,12 +344,12 @@ fn take_first_mut<N>(chunk: &mut [N]) -> &mut N {
 
 
 
-impl<N, Storage> StridedVec<N, Storage>
+impl<N, Storage> Tensor<N, [usize;1], Storage>
 where Storage: Deref<Target=[N]> {
 
     /// Iterate over a dense vector's values by reference
     pub fn iter(&self) -> Map<Chunks<N>, fn(&[N]) -> &N> {
-        self.data.chunks(self.stride).map(take_first)
+        self.data.chunks(self.stride()).map(take_first)
     }
 
     /// The underlying data
@@ -368,21 +359,21 @@ where Storage: Deref<Target=[N]> {
 
     /// The number of dimensions
     pub fn dim(&self) -> usize {
-        self.dim
+        self.shape[0]
     }
 
     /// The stride of this vector
     pub fn stride(&self) -> usize {
-        self.stride
+        self.strides[0]
     }
 }
 
-impl<N, Storage> StridedVec<N, Storage>
+impl<N, Storage> Tensor<N, [usize;1], Storage>
 where Storage: DerefMut<Target=[N]> {
 
     /// Iterate over a dense vector's values by mutable reference
     pub fn iter_mut(&mut self) -> Map<ChunksMut<N>, fn(&mut [N]) -> &mut N> {
-        self.data.chunks_mut(self.stride).map(take_first_mut)
+        self.data.chunks_mut(self.strides[0]).map(take_first_mut)
     }
 
     /// The underlying data as a mutable slice
