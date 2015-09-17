@@ -18,8 +18,8 @@ pub use mat::{StridedVec, VecView, VecViewMut, VecOwned};
 
 /// Describe the storage order of a matrix.
 pub enum StorageOrder {
-    /// Column major storage 
+    /// Column major storage
     ColMaj,
-    /// Row major storage 
+    /// Row major storage
     RowMaj
 }

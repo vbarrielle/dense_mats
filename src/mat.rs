@@ -51,7 +51,7 @@ impl<N> StridedMat<N, Vec<N>> {
     }
 
     /// Return the identity matrix of dimension `dim`
-    /// 
+    ///
     /// The storage will be row major, however one can transpose if needed
     pub fn eye(dim: usize) -> MatOwned<N>
     where N: Num + Copy {
@@ -88,7 +88,7 @@ impl<'a, N: 'a> StridedMat<N, &'a [N]> {
 
     /// Slice along the least varying dimension of the matrix, from
     /// index `start` and taking `count` vectors.
-    /// 
+    ///
     /// e.g. for a row major matrix, get a view of `count` rows starting
     /// from `start`.
     pub fn middle_outer_views(&self,
@@ -164,17 +164,17 @@ where Storage: Deref<Target=[N]> {
     }
 
     /// The strides of the matrix.
-    /// 
+    ///
     /// self.strides()[0] gives the number of elements that must be skipped
     /// into self.data() to get to the element of the next row with the same
     /// column.
     /// self.strides()[1] gives the number of elements that must be skipped
     /// into self.data() to get to the element of the next column with the same
     /// row.
-    /// 
+    ///
     /// For a row major matrix of shape (3, 4) with contiguous storage,
     /// the strides would be [4, 1].
-    /// 
+    ///
     /// For alignement reasons, it is possible to have strides that don't match
     /// the shape of the matrix (meaning that some elements of the data array
     /// are unused).
@@ -183,7 +183,7 @@ where Storage: Deref<Target=[N]> {
     }
 
     /// Access to the matrix's data
-    /// 
+    ///
     /// Getting access to the element located at row i and column j
     /// can be done by indexing self.data() at the location
     /// computed by i * strides[0] + j * strides[1]
@@ -289,7 +289,7 @@ where Storage: Deref<Target=[N]> {
 impl<N, Storage> StridedMat<N, Storage>
 where Storage: DerefMut<Target=[N]> {
     /// Mutable access to the matrix's data
-    /// 
+    ///
     /// Getting access to the element located at row i and column j
     /// can be done by indexing self.data() at the location
     /// computed by i * strides[0] + j * strides[1]
