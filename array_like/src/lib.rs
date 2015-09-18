@@ -18,8 +18,8 @@ impl<A> ArrayLike<A> {
         }
     }
 
-    pub fn inner(&self) -> A where A: Copy {
-        self.array
+    pub fn inner(&self) -> A where A: Clone {
+        self.array.clone() // This should actually be a copy
     }
 }
 

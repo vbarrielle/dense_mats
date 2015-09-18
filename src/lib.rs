@@ -18,9 +18,14 @@ pub use mat::{Tensor, MatView, MatViewMut, MatOwned};
 pub use mat::{VecView, VecViewMut, VecOwned};
 
 /// Describe the storage order of a matrix.
+#[derive(PartialEq, Debug)]
 pub enum StorageOrder {
-    /// Column major storage
-    ColMaj,
-    /// Row major storage
-    RowMaj
+    /// C storage order, ie column major storage for matrices
+    /// The dimensions are sorted in decreasing order of variation
+    F,
+    /// C storage order, ie row major storage for matrices
+    /// The dimensions are sorted in increasing order of variation
+    C,
+    /// Nothing special can be assumed about the order
+    Unordered
 }

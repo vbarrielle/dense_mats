@@ -1,9 +1,10 @@
 ///! A strided matrix implementation
 
-use std::ops::{Deref, DerefMut, Range};
+use std::ops::{Deref, DerefMut, Range, IndexMut};
 use std::iter::Map;
 use std::slice::{Chunks, ChunksMut};
 use num::traits::Num;
+use std::fmt::Debug;
 
 use array_like::ArrayLike;
 
@@ -18,6 +19,178 @@ where Storage: Deref<Target=[N]>,
     data: Storage,
     shape: ArrayLike<DimArray>,
     strides: ArrayLike<DimArray>,
+}
+
+pub type TensorView<'a, N, DimArray> = Tensor<N, DimArray, &'a [N]>;
+pub type TensorViewMut<'a, N, DimArray> = Tensor<N, DimArray, &'a mut [N]>;
+pub type TensorOwned<N, DimArray> = Tensor<N, DimArray, Vec<N>>;
+
+/// Methods available for all tensors regardless of their dimension count
+impl<'a, N: 'a, DimArray> Tensor<N, DimArray, &'a[N]>
+where ArrayLike<DimArray>: Deref<Target=[usize]> + Copy,
+      DimArray: Clone + AsMut<[usize]> + Debug {
+
+    /// Slice along the least varying dimension of the matrix, from
+    /// index `start` and taking `count` vectors.
+    ///
+    /// e.g. for a row major matrix, get a view of `count` rows starting
+    /// from `start`.
+    pub fn middle_outer_views(&self,
+                              start: usize,
+                              count: usize
+                             ) -> Result<TensorView<'a, N, DimArray>,
+                                         DMatError> {
+        let end = start + count;
+        if count == 0 {
+            return Err(DMatError::EmptyView);
+        }
+        let outer_shape = try!(self.outer_shape()
+                                   .ok_or(DMatError::ZeroDimTensor));
+        if start >= outer_shape || end > outer_shape {
+            return Err(DMatError::OutOfBoundsIndex);
+        }
+        let dim_index = try!(self.outer_dim().ok_or(DMatError::ZeroDimTensor));
+        let mut shape = self.shape.inner().clone();
+        shape.as_mut()[dim_index] = count;
+
+        let s = try!(self.outer_stride().ok_or(DMatError::ZeroDimTensor));
+        let sliced_data = &self.data[start * s .. end * s];
+        Ok(TensorView {
+            data: sliced_data,
+            shape: ArrayLike::new(shape),
+            strides: self.strides,
+        })
+    }
+}
+
+/// Methods available for all tensors regardless of their dimension count
+impl<N, DimArray, Storage> Tensor<N, DimArray, Storage>
+where ArrayLike<DimArray>: Deref<Target=[usize]> + Copy,
+      DimArray: Clone,
+      Storage: Deref<Target=[N]> {
+
+    /// The strides of the tensor.
+    ///
+    /// # Explanations on a matrix.
+    ///
+    /// self.strides()[0] gives the number of elements that must be skipped
+    /// into self.data() to get to the element of the next row with the same
+    /// column.
+    /// self.strides()[1] gives the number of elements that must be skipped
+    /// into self.data() to get to the element of the next column with the same
+    /// row.
+    ///
+    /// For a row major matrix of shape (3, 4) with contiguous storage,
+    /// the strides would be [4, 1].
+    ///
+    /// For alignement reasons, it is possible to have strides that don't match
+    /// the shape of the matrix (meaning that some elements of the data array
+    /// are unused).
+    pub fn strides(&self) -> DimArray {
+        self.strides.inner().clone()
+    }
+
+    /// Access to the tensors's data
+    ///
+    /// # Explanations on a matrix.
+    ///
+    /// Getting access to the element located at row i and column j
+    /// can be done by indexing self.data() at the location
+    /// computed by i * strides[0] + j * strides[1]
+    pub fn data(&self) -> &[N] {
+        &self.data[..]
+    }
+
+    /// The shape of the tensor
+    pub fn shape(&self) -> DimArray {
+        self.shape.inner().clone()
+    }
+
+
+    /// Get the storage order of this tensor
+    pub fn ordering(&self) -> StorageOrder {
+        let ascending = self.strides.windows(2).all(|w| w[0] < w[1]);
+        let descending = self.strides.windows(2).all(|w| w[0] > w[1]);
+        match (ascending, descending) {
+            (true, false) => StorageOrder::F,
+            (false, true) => StorageOrder::C,
+            _ => StorageOrder::Unordered,
+        }
+    }
+
+    /// Get the slowest varying dimension index
+    pub fn outer_dim(&self) -> Option<usize> {
+        self.strides.iter().enumerate()
+                           .fold(None, |max, (i, &x)| {
+                               max.map_or(Some((i, x)), |(i0, x0)| {
+                                   if x > x0 {
+                                       Some((i, x))
+                                   }
+                                   else {
+                                       Some((i0, x0))
+                                   }
+                               })
+                           }).map(|(i, _)| i)
+    }
+
+    /// Get the fastest varying dimension index
+    pub fn inner_dim(&self) -> Option<usize> {
+        self.strides.iter().enumerate()
+                           .fold(None, |min, (i, &x)| {
+                               min.map_or(Some((i, x)), |(i0, x0)| {
+                                   if x < x0 {
+                                       Some((i, x))
+                                   }
+                                   else {
+                                       Some((i0, x0))
+                                   }
+                               })
+                           }).map(|(i, _)| i)
+    }
+
+    /// The stride for the outer dimension
+    pub fn outer_stride(&self) -> Option<usize> {
+        self.outer_dim().map(|i| self.strides[i])
+    }
+
+    /// The stride for the inner dimension
+    pub fn inner_stride(&self) -> Option<usize> {
+        self.inner_dim().map(|i| self.strides[i])
+    }
+
+    /// The shape of the outer dimension
+    pub fn outer_shape(&self) -> Option<usize> {
+        self.outer_dim().map(|i| self.shape[i])
+    }
+
+    /// The stride for the inner dimension
+    pub fn inner_shape(&self) -> Option<usize> {
+        self.inner_dim().map(|i| self.shape[i])
+    }
+
+    /// Get a view into this tensor
+    pub fn borrowed(&self) -> TensorView<N, DimArray> {
+        TensorView {
+            data: &self.data[..],
+            shape: self.shape,
+            strides: self.strides,
+        }
+    }
+
+}
+
+/// Methods available for all tensors regardless of their dimension count
+impl<'a, N: 'a, DimArray> Tensor<N, DimArray, &'a mut [N]>
+where ArrayLike<DimArray>: Deref<Target=[usize]> + Copy {
+
+    /// Get a mutable view into this tensor
+    pub fn borrowed_mut(&mut self) -> TensorViewMut<N, DimArray> {
+        TensorViewMut {
+            data: &mut self.data[..],
+            shape: self.shape,
+            strides: self.strides,
+        }
+    }
 }
 
 pub type MatView<'a, N> = Tensor<N, [usize; 2], &'a [N]>;
@@ -36,12 +209,15 @@ impl<N> Tensor<N, [usize; 2], Vec<N>> {
     }
 
     /// Create an all-zero dense matrix
+    ///
+    /// Defaults to C order if order equals Unordered
     pub fn zeros(rows: usize, cols: usize,
                  order: StorageOrder) -> MatOwned<N>
     where N: Num + Copy {
         let strides = match order {
-            StorageOrder::RowMaj => [cols, 1],
-            StorageOrder::ColMaj => [1, rows],
+            StorageOrder::C => [cols, 1],
+            StorageOrder::F => [1, rows],
+            StorageOrder::Unordered => [cols, 1]
         };
         Tensor {
             data: vec![N::zero(); rows*cols],
@@ -75,7 +251,7 @@ impl<N> Tensor<N, [usize; 2], Vec<N>> {
 impl<'a, N: 'a> Tensor<N, [usize; 2], &'a [N]> {
 
     /// Create a view of a matrix implementing DenseMatView
-    pub fn new_borrowed(data: &'a [N], rows: usize, cols: usize,
+    pub fn new_mat_view(data: &'a [N], rows: usize, cols: usize,
                         strides: [usize; 2]) -> MatView<'a, N> {
         Tensor {
             data: data,
@@ -84,35 +260,6 @@ impl<'a, N: 'a> Tensor<N, [usize; 2], &'a [N]> {
         }
     }
 
-    /// Slice along the least varying dimension of the matrix, from
-    /// index `start` and taking `count` vectors.
-    ///
-    /// e.g. for a row major matrix, get a view of `count` rows starting
-    /// from `start`.
-    pub fn middle_outer_views(&self,
-                              start: usize,
-                              count: usize
-                             ) -> Result<MatView<'a, N>, DMatError> {
-        let end = start + count;
-        if count == 0 {
-            return Err(DMatError::EmptyView);
-        }
-        if start >= self.outer_dims() || end > self.outer_dims() {
-            return Err(DMatError::OutOfBoundsIndex);
-        }
-        let (rows, cols) = match self.ordering() {
-            StorageOrder::RowMaj => (count, self.cols()),
-            StorageOrder::ColMaj => (self.rows(), count),
-        };
-
-        let s = self.outer_stride();
-        let sliced_data = &self.data[start * s .. end * s];
-        Ok(MatView {
-            data: sliced_data,
-            shape: ArrayLike::new([rows, cols]),
-            strides: self.strides,
-        })
-    }
 }
 
 impl<N, Storage> Tensor<N, [usize; 2], Storage>
@@ -126,82 +273,6 @@ where Storage: Deref<Target=[N]> {
     /// The number of cols of the matrix
     pub fn cols(&self) -> usize {
         self.shape[1]
-    }
-
-    /// The number of least varying dimensions
-    pub fn outer_dims(&self) -> usize {
-        match self.ordering() {
-            StorageOrder::RowMaj => self.rows(),
-            StorageOrder::ColMaj => self.cols(),
-        }
-    }
-
-    /// The number of most varying dimensions
-    pub fn inner_dims(&self) -> usize {
-        match self.ordering() {
-            StorageOrder::RowMaj => self.cols(),
-            StorageOrder::ColMaj => self.rows(),
-        }
-    }
-
-    /// The stride for the outer dimension
-    pub fn outer_stride(&self) -> usize {
-        match self.ordering() {
-            StorageOrder::RowMaj => self.strides[0],
-            StorageOrder::ColMaj => self.strides[1],
-        }
-    }
-
-    /// The stride for the inner dimension
-    pub fn inner_stride(&self) -> usize {
-        match self.ordering() {
-            StorageOrder::RowMaj => self.strides[1],
-            StorageOrder::ColMaj => self.strides[0],
-        }
-    }
-
-    /// The strides of the matrix.
-    ///
-    /// self.strides()[0] gives the number of elements that must be skipped
-    /// into self.data() to get to the element of the next row with the same
-    /// column.
-    /// self.strides()[1] gives the number of elements that must be skipped
-    /// into self.data() to get to the element of the next column with the same
-    /// row.
-    ///
-    /// For a row major matrix of shape (3, 4) with contiguous storage,
-    /// the strides would be [4, 1].
-    ///
-    /// For alignement reasons, it is possible to have strides that don't match
-    /// the shape of the matrix (meaning that some elements of the data array
-    /// are unused).
-    pub fn strides(&self) -> [usize; 2] {
-        self.strides.inner()
-    }
-
-    /// Access to the matrix's data
-    ///
-    /// Getting access to the element located at row i and column j
-    /// can be done by indexing self.data() at the location
-    /// computed by i * strides[0] + j * strides[1]
-    pub fn data(&self) -> &[N] {
-        &self.data[..]
-    }
-
-    /// The number of rows and cols of the matrix
-    pub fn shape(&self) -> [usize; 2] {
-        [self.rows(), self.cols()]
-    }
-
-    /// Storage order. Specifies which dimension is stored the most contiguously
-    /// in memory
-    pub fn ordering(&self) -> StorageOrder {
-        if self.strides()[0] > self.strides()[1] {
-            return StorageOrder::RowMaj;
-        }
-        else {
-            return StorageOrder::ColMaj;
-        }
     }
 
     /// Give the index into self.data() for accessing the element
@@ -242,8 +313,9 @@ where Storage: Deref<Target=[N]> {
             return Err(DMatError::OutOfBoundsIndex);
         }
         let range = match self.ordering() {
-            StorageOrder::RowMaj => self.row_range_rowmaj(i),
-            StorageOrder::ColMaj => self.row_range_colmaj(i),
+            StorageOrder::C => self.row_range_rowmaj(i),
+            StorageOrder::F => self.row_range_colmaj(i),
+            StorageOrder::Unordered => unreachable!(),
         };
         Ok(Tensor {
             data: &self.data[range],
@@ -258,8 +330,9 @@ where Storage: Deref<Target=[N]> {
             return Err(DMatError::OutOfBoundsIndex);
         }
         let range = match self.ordering() {
-            StorageOrder::RowMaj => self.col_range_rowmaj(j),
-            StorageOrder::ColMaj => self.col_range_colmaj(j),
+            StorageOrder::C => self.col_range_rowmaj(j),
+            StorageOrder::F => self.col_range_colmaj(j),
+            StorageOrder::Unordered => unreachable!(),
         };
         Ok(Tensor {
             data: &self.data[range],
@@ -299,8 +372,9 @@ where Storage: DerefMut<Target=[N]> {
             return Err(DMatError::OutOfBoundsIndex);
         }
         let range = match self.ordering() {
-            StorageOrder::RowMaj => self.row_range_rowmaj(i),
-            StorageOrder::ColMaj => self.row_range_colmaj(i),
+            StorageOrder::C => self.row_range_rowmaj(i),
+            StorageOrder::F => self.row_range_colmaj(i),
+            StorageOrder::Unordered => unreachable!(),
         };
         let dim = self.cols();
         Ok(Tensor {
@@ -317,8 +391,9 @@ where Storage: DerefMut<Target=[N]> {
             return Err(DMatError::OutOfBoundsIndex);
         }
         let range = match self.ordering() {
-            StorageOrder::RowMaj => self.col_range_rowmaj(j),
-            StorageOrder::ColMaj => self.col_range_colmaj(j),
+            StorageOrder::C => self.col_range_rowmaj(j),
+            StorageOrder::F => self.col_range_colmaj(j),
+            StorageOrder::Unordered => unreachable!(),
         };
         let dim = self.cols();
         Ok(Tensor {
@@ -350,11 +425,6 @@ where Storage: Deref<Target=[N]> {
     /// Iterate over a dense vector's values by reference
     pub fn iter(&self) -> Map<Chunks<N>, fn(&[N]) -> &N> {
         self.data.chunks(self.stride()).map(take_first)
-    }
-
-    /// The underlying data
-    pub fn data(&self) -> &[N] {
-        &self.data[..]
     }
 
     /// The number of dimensions
@@ -398,8 +468,8 @@ impl<'a, N: 'a> Iterator for ChunkOuterBlocks<'a, N> {
         let count = if self.dims_in_bloc == 0 {
             return None;
         }
-        else if end_dim > self.mat.outer_dims() {
-            let count = self.mat.outer_dims() - cur_dim;
+        else if end_dim > self.mat.outer_shape().unwrap() {
+            let count = self.mat.outer_shape().unwrap() - cur_dim;
             self.dims_in_bloc = 0;
             count
         }
@@ -505,7 +575,7 @@ mod tests {
 
     #[test]
     fn col_iter() {
-        let mat = Tensor::new_owned(vec![1., 1., 0., 0., 1., 0., 0., 0., 1.],
+        let mat = MatOwned::new_owned(vec![1., 1., 0., 0., 1., 0., 0., 0., 1.],
                                   3, 3, [1, 3]);
 
         {

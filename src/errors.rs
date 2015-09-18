@@ -12,6 +12,8 @@ pub enum DMatError {
     NotImplemented,
     OutOfBoundsIndex,
     EmptyView,
+    UnorderedStorage,
+    ZeroDimTensor,
 }
 
 use self::DMatError::*;
@@ -27,6 +29,8 @@ impl DMatError {
             NotImplemented => "this method is not yet implemented",
             OutOfBoundsIndex => "an element in indices is out of bounds",
             EmptyView => "trying to create a view without elements",
+            UnorderedStorage => "this algorithm expects C or F storage order",
+            ZeroDimTensor => "this tensor has no dimensions",
         }
     }
 }
