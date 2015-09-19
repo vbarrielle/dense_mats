@@ -2,7 +2,7 @@
 
 use std::ops::{Deref, DerefMut, Range};
 use std::iter::Map;
-use std::slice::{Chunks, ChunksMut};
+use std::slice::{self, Chunks, ChunksMut};
 use num::traits::Num;
 
 use array_like::{ArrayLike, ArrayLikeMut};
@@ -60,6 +60,50 @@ where DimArray: ArrayLikeMut<usize> {
         })
     }
 }
+
+impl<'a, N: 'a, DimArray> Tensor<N, DimArray, &'a mut [N]>
+where DimArray: ArrayLikeMut<usize> {
+
+    /// Slice mutably along the least varying dimension of the matrix, from
+    /// index `start` and taking `count` vectors.
+    ///
+    /// e.g. for a row major matrix, get a view of `count` rows starting
+    /// from `start`.
+    pub fn middle_outer_views_mut(&mut self,
+                                  start: usize,
+                                  count: usize
+                                 ) -> Result<TensorViewMut<'a, N, DimArray>,
+                                             DMatError> {
+        let end = start + count;
+        if count == 0 {
+            return Err(DMatError::EmptyView);
+        }
+        let outer_shape = try!(self.outer_shape()
+                                   .ok_or(DMatError::ZeroDimTensor));
+        if start >= outer_shape || end > outer_shape {
+            return Err(DMatError::OutOfBoundsIndex);
+        }
+        let dim_index = try!(self.outer_dim().ok_or(DMatError::ZeroDimTensor));
+        let mut shape = self.shape.clone();
+        shape.as_mut()[dim_index] = count;
+
+        let s = try!(self.outer_stride().ok_or(DMatError::ZeroDimTensor));
+        let strides = self.strides();
+
+        // safe because we already checked for out of bounds
+        let sliced_data = unsafe {
+            let ptr = self.data.as_mut_ptr();
+            slice::from_raw_parts_mut(ptr.offset((start * s) as isize),
+                                      count * s)
+        };
+        Ok(TensorViewMut {
+            data: sliced_data,
+            shape: shape,
+            strides: strides,
+        })
+    }
+}
+
 
 /// Methods available for all tensors regardless of their dimension count
 impl<N, DimArray, Storage> Tensor<N, DimArray, Storage>
@@ -183,6 +227,44 @@ where DimArray: ArrayLike<usize>,
         }
     }
 
+    /// Iteration on outer blocks views of size block_size
+    pub fn outer_block_iter(&self, block_size: usize
+                           ) -> ChunkOuterBlocks<N, DimArray> {
+        let t = TensorView {
+            data: &self.data[..],
+            shape: self.shape(),
+            strides: self.strides(),
+        };
+        ChunkOuterBlocks {
+            tensor: t,
+            dims_in_bloc: block_size,
+            bloc_count: 0,
+        }
+    }
+
+
+}
+
+impl<N, DimArray, Storage> Tensor<N, DimArray, Storage>
+where DimArray: ArrayLike<usize>,
+      Storage: DerefMut<Target=[N]> {
+
+    /// Iteration on mutable outer blocks views of size block_size
+    pub fn outer_block_iter_mut(&mut self, block_size: usize
+                               ) -> ChunkOuterBlocksMut<N, DimArray> {
+        let shape = self.shape();
+        let strides = self.strides();
+        let t = TensorViewMut {
+            data: &mut self.data[..],
+            shape: shape,
+            strides: strides,
+        };
+        ChunkOuterBlocksMut {
+            tensor: t,
+            dims_in_bloc: block_size,
+            bloc_count: 0,
+        }
+    }
 }
 
 /// Methods available for all tensors regardless of their dimension count
@@ -349,18 +431,6 @@ where Storage: Deref<Target=[N]> {
         })
     }
 
-    pub fn outer_block_iter(&self, block_size: usize) -> ChunkOuterBlocks<N> {
-        let mat = MatView {
-            data: &self.data[..],
-            shape: [self.rows(), self.cols()],
-            strides: self.strides,
-        };
-        ChunkOuterBlocks {
-            mat: mat,
-            dims_in_bloc: block_size,
-            bloc_count: 0,
-        }
-    }
 }
 
 impl<N, Storage> Tensor<N, [usize; 2], Storage>
@@ -462,35 +532,69 @@ where Storage: DerefMut<Target=[N]> {
 
 /// An iterator over non-overlapping blocks of a matrix,
 /// along the least-varying dimension
-pub struct ChunkOuterBlocks<'a, N: 'a> {
-    mat: MatView<'a, N>,
+pub struct ChunkOuterBlocks<'a, N: 'a, DimArray>
+where DimArray: ArrayLike<usize> {
+    tensor: TensorView<'a, N, DimArray>,
     dims_in_bloc: usize,
     bloc_count: usize
 }
 
-impl<'a, N: 'a> Iterator for ChunkOuterBlocks<'a, N> {
-    type Item = MatView<'a, N>;
+impl<'a, N: 'a, DimArray> Iterator for ChunkOuterBlocks<'a, N, DimArray>
+where DimArray: ArrayLikeMut<usize> {
+    type Item = TensorView<'a, N, DimArray>;
     fn next(&mut self) -> Option<<Self as Iterator>::Item> {
         let cur_dim = self.dims_in_bloc * self.bloc_count;
         let end_dim = self.dims_in_bloc + cur_dim;
         let count = if self.dims_in_bloc == 0 {
             return None;
         }
-        else if end_dim > self.mat.outer_shape().unwrap() {
-            let count = self.mat.outer_shape().unwrap() - cur_dim;
+        else if end_dim > self.tensor.outer_shape().unwrap() {
+            let count = self.tensor.outer_shape().unwrap() - cur_dim;
             self.dims_in_bloc = 0;
             count
         }
         else {
             self.dims_in_bloc
         };
-        let view = self.mat.middle_outer_views(cur_dim,
-                                               count).unwrap();
+        let view = self.tensor.middle_outer_views(cur_dim,
+                                                  count).unwrap();
         self.bloc_count += 1;
         Some(view)
     }
 }
 
+/// An iterator over non-overlapping mutable blocks of a matrix,
+/// along the least-varying dimension
+pub struct ChunkOuterBlocksMut<'a, N: 'a, DimArray>
+where DimArray: ArrayLike<usize> {
+    tensor: TensorViewMut<'a, N, DimArray>,
+    dims_in_bloc: usize,
+    bloc_count: usize
+}
+
+impl<'a, N: 'a, DimArray> Iterator for ChunkOuterBlocksMut<'a, N, DimArray>
+where DimArray: ArrayLikeMut<usize> {
+    type Item = TensorViewMut<'a, N, DimArray>;
+    fn next(&mut self) -> Option<<Self as Iterator>::Item> {
+        let cur_dim = self.dims_in_bloc * self.bloc_count;
+        let end_dim = self.dims_in_bloc + cur_dim;
+        let count = if self.dims_in_bloc == 0 {
+            return None;
+        }
+        else if end_dim > self.tensor.outer_shape().unwrap() {
+            let count = self.tensor.outer_shape().unwrap() - cur_dim;
+            self.dims_in_bloc = 0;
+            count
+        }
+        else {
+            self.dims_in_bloc
+        };
+        let view = self.tensor.middle_outer_views_mut(cur_dim,
+                                                  count).unwrap();
+        self.bloc_count += 1;
+        Some(view)
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -652,5 +756,14 @@ mod tests {
                                                         0., 1., 0.]);
         assert_eq!(block_iter.next().unwrap().data(), &[0., 0., 1.]);
         assert_eq!(block_iter.next(), None);
+    }
+
+    #[test]
+    fn outer_block_iter_mut() {
+        let mut mat: MatOwned<f64> = Tensor::eye(11);
+        let mut block_iter = mat.outer_block_iter_mut(3);
+        assert_eq!(block_iter.next().unwrap().rows(), 3);
+        let mut block2 = block_iter.next().unwrap();
+        block2.row_mut(0).unwrap().data_mut()[0] = 1.;
     }
 }
