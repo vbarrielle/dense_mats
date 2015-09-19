@@ -1,12 +1,11 @@
 ///! A strided matrix implementation
 
-use std::ops::{Deref, DerefMut, Range, IndexMut};
+use std::ops::{Deref, DerefMut, Range};
 use std::iter::Map;
 use std::slice::{Chunks, ChunksMut};
 use num::traits::Num;
-use std::fmt::Debug;
 
-use array_like::ArrayLike;
+use array_like::{ArrayLike, ArrayLikeMut};
 
 use errors::DMatError;
 use StorageOrder;
@@ -15,10 +14,10 @@ use StorageOrder;
 #[derive(PartialEq, Debug)]
 pub struct Tensor<N, DimArray, Storage>
 where Storage: Deref<Target=[N]>,
-      ArrayLike<DimArray>: Deref<Target=[usize]> + Copy {
+      DimArray: ArrayLike<usize> {
     data: Storage,
-    shape: ArrayLike<DimArray>,
-    strides: ArrayLike<DimArray>,
+    shape: DimArray,
+    strides: DimArray,
 }
 
 pub type TensorView<'a, N, DimArray> = Tensor<N, DimArray, &'a [N]>;
@@ -27,8 +26,7 @@ pub type TensorOwned<N, DimArray> = Tensor<N, DimArray, Vec<N>>;
 
 /// Methods available for all tensors regardless of their dimension count
 impl<'a, N: 'a, DimArray> Tensor<N, DimArray, &'a[N]>
-where ArrayLike<DimArray>: Deref<Target=[usize]> + Copy,
-      DimArray: Clone + AsMut<[usize]> + Debug {
+where DimArray: ArrayLikeMut<usize> {
 
     /// Slice along the least varying dimension of the matrix, from
     /// index `start` and taking `count` vectors.
@@ -50,23 +48,22 @@ where ArrayLike<DimArray>: Deref<Target=[usize]> + Copy,
             return Err(DMatError::OutOfBoundsIndex);
         }
         let dim_index = try!(self.outer_dim().ok_or(DMatError::ZeroDimTensor));
-        let mut shape = self.shape.inner().clone();
+        let mut shape = self.shape.clone();
         shape.as_mut()[dim_index] = count;
 
         let s = try!(self.outer_stride().ok_or(DMatError::ZeroDimTensor));
         let sliced_data = &self.data[start * s .. end * s];
         Ok(TensorView {
             data: sliced_data,
-            shape: ArrayLike::new(shape),
-            strides: self.strides,
+            shape: shape,
+            strides: self.strides(),
         })
     }
 }
 
 /// Methods available for all tensors regardless of their dimension count
 impl<N, DimArray, Storage> Tensor<N, DimArray, Storage>
-where ArrayLike<DimArray>: Deref<Target=[usize]> + Copy,
-      DimArray: Clone,
+where DimArray: ArrayLike<usize>,
       Storage: Deref<Target=[N]> {
 
     /// The strides of the tensor.
@@ -87,7 +84,7 @@ where ArrayLike<DimArray>: Deref<Target=[usize]> + Copy,
     /// the shape of the matrix (meaning that some elements of the data array
     /// are unused).
     pub fn strides(&self) -> DimArray {
-        self.strides.inner().clone()
+        self.strides.clone()
     }
 
     /// Access to the tensors's data
@@ -103,14 +100,14 @@ where ArrayLike<DimArray>: Deref<Target=[usize]> + Copy,
 
     /// The shape of the tensor
     pub fn shape(&self) -> DimArray {
-        self.shape.inner().clone()
+        self.shape.clone()
     }
 
 
     /// Get the storage order of this tensor
     pub fn ordering(&self) -> StorageOrder {
-        let ascending = self.strides.windows(2).all(|w| w[0] < w[1]);
-        let descending = self.strides.windows(2).all(|w| w[0] > w[1]);
+        let ascending = self.strides.as_ref().windows(2).all(|w| w[0] < w[1]);
+        let descending = self.strides.as_ref().windows(2).all(|w| w[0] > w[1]);
         match (ascending, descending) {
             (true, false) => StorageOrder::F,
             (false, true) => StorageOrder::C,
@@ -120,7 +117,7 @@ where ArrayLike<DimArray>: Deref<Target=[usize]> + Copy,
 
     /// Get the slowest varying dimension index
     pub fn outer_dim(&self) -> Option<usize> {
-        self.strides.iter().enumerate()
+        self.strides.as_ref().iter().enumerate()
                            .fold(None, |max, (i, &x)| {
                                max.map_or(Some((i, x)), |(i0, x0)| {
                                    if x > x0 {
@@ -135,7 +132,7 @@ where ArrayLike<DimArray>: Deref<Target=[usize]> + Copy,
 
     /// Get the fastest varying dimension index
     pub fn inner_dim(&self) -> Option<usize> {
-        self.strides.iter().enumerate()
+        self.strides.as_ref().iter().enumerate()
                            .fold(None, |min, (i, &x)| {
                                min.map_or(Some((i, x)), |(i0, x0)| {
                                    if x < x0 {
@@ -150,30 +147,30 @@ where ArrayLike<DimArray>: Deref<Target=[usize]> + Copy,
 
     /// The stride for the outer dimension
     pub fn outer_stride(&self) -> Option<usize> {
-        self.outer_dim().map(|i| self.strides[i])
+        self.outer_dim().map(|i| self.strides.as_ref()[i])
     }
 
     /// The stride for the inner dimension
     pub fn inner_stride(&self) -> Option<usize> {
-        self.inner_dim().map(|i| self.strides[i])
+        self.inner_dim().map(|i| self.strides.as_ref()[i])
     }
 
     /// The shape of the outer dimension
     pub fn outer_shape(&self) -> Option<usize> {
-        self.outer_dim().map(|i| self.shape[i])
+        self.outer_dim().map(|i| self.shape.as_ref()[i])
     }
 
     /// The stride for the inner dimension
     pub fn inner_shape(&self) -> Option<usize> {
-        self.inner_dim().map(|i| self.shape[i])
+        self.inner_dim().map(|i| self.shape.as_ref()[i])
     }
 
     /// Get a view into this tensor
     pub fn borrowed(&self) -> TensorView<N, DimArray> {
         TensorView {
             data: &self.data[..],
-            shape: self.shape,
-            strides: self.strides,
+            shape: self.shape(),
+            strides: self.strides(),
         }
     }
 
@@ -181,14 +178,16 @@ where ArrayLike<DimArray>: Deref<Target=[usize]> + Copy,
 
 /// Methods available for all tensors regardless of their dimension count
 impl<'a, N: 'a, DimArray> Tensor<N, DimArray, &'a mut [N]>
-where ArrayLike<DimArray>: Deref<Target=[usize]> + Copy {
+where DimArray: ArrayLike<usize> {
 
     /// Get a mutable view into this tensor
     pub fn borrowed_mut(&mut self) -> TensorViewMut<N, DimArray> {
+        let shape = self.shape();
+        let stride = self.strides();
         TensorViewMut {
             data: &mut self.data[..],
-            shape: self.shape,
-            strides: self.strides,
+            shape: shape,
+            strides: stride,
         }
     }
 }
@@ -203,8 +202,8 @@ impl<N> Tensor<N, [usize; 2], Vec<N>> {
                      cols: usize, strides: [usize;2]) -> MatOwned<N> {
         Tensor {
             data: data,
-            shape: ArrayLike::new([rows, cols]),
-            strides: ArrayLike::new(strides),
+            shape: [rows, cols],
+            strides: strides,
         }
     }
 
@@ -221,8 +220,8 @@ impl<N> Tensor<N, [usize; 2], Vec<N>> {
         };
         Tensor {
             data: vec![N::zero(); rows*cols],
-            shape: ArrayLike::new([rows, cols]),
-            strides: ArrayLike::new(strides),
+            shape: [rows, cols],
+            strides: strides,
         }
     }
 
@@ -236,8 +235,8 @@ impl<N> Tensor<N, [usize; 2], Vec<N>> {
         }).collect();
         Tensor {
             data: data,
-            shape: ArrayLike::new([dim, dim]),
-            strides: ArrayLike::new([dim, 1]),
+            shape: [dim, dim],
+            strides: [dim, 1],
         }
     }
 
@@ -255,8 +254,8 @@ impl<'a, N: 'a> Tensor<N, [usize; 2], &'a [N]> {
                         strides: [usize; 2]) -> MatView<'a, N> {
         Tensor {
             data: data,
-            shape: ArrayLike::new([rows, cols]),
-            strides: ArrayLike::new(strides),
+            shape: [rows, cols],
+            strides: strides,
         }
     }
 
@@ -319,8 +318,8 @@ where Storage: Deref<Target=[N]> {
         };
         Ok(Tensor {
             data: &self.data[range],
-            shape: ArrayLike::new([self.cols()]),
-            strides: ArrayLike::new([self.strides[1]]),
+            shape: [self.cols()],
+            strides: [self.strides[1]],
         })
     }
 
@@ -336,15 +335,15 @@ where Storage: Deref<Target=[N]> {
         };
         Ok(Tensor {
             data: &self.data[range],
-            shape: ArrayLike::new([self.rows()]),
-            strides: ArrayLike::new([self.strides[0]]),
+            shape: [self.rows()],
+            strides: [self.strides[0]],
         })
     }
 
     pub fn outer_block_iter(&self, block_size: usize) -> ChunkOuterBlocks<N> {
         let mat = MatView {
             data: &self.data[..],
-            shape: ArrayLike::new([self.rows(), self.cols()]),
+            shape: [self.rows(), self.cols()],
             strides: self.strides,
         };
         ChunkOuterBlocks {
@@ -379,8 +378,8 @@ where Storage: DerefMut<Target=[N]> {
         let dim = self.cols();
         Ok(Tensor {
             data: &mut self.data[range],
-            shape: ArrayLike::new([dim]),
-            strides: ArrayLike::new([self.strides[1]]),
+            shape: [dim],
+            strides: [self.strides[1]],
         })
     }
 
@@ -398,8 +397,8 @@ where Storage: DerefMut<Target=[N]> {
         let dim = self.cols();
         Ok(Tensor {
             data: &mut self.data[range],
-            shape: ArrayLike::new([dim]),
-            strides: ArrayLike::new([self.strides[0]]),
+            shape: [dim],
+            strides: [self.strides[0]],
         })
     }
 }

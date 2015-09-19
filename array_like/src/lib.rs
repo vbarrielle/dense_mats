@@ -4,56 +4,20 @@ implement Copy or Deref (even though in practice they are).
 This enables asking for arrays as a generic bound
 */
 
-use std::ops::{Deref, DerefMut};
+use std::ops::{Index, IndexMut};
 
-#[derive(Debug, PartialEq)]
-pub struct ArrayLike<A> {
-    array: A,
-}
-
-impl<A> ArrayLike<A> {
-    pub fn new(a: A) -> Self {
-        ArrayLike {
-            array: a,
-        }
-    }
-
-    pub fn inner(&self) -> A where A: Clone {
-        self.array.clone() // This should actually be a copy
+pub trait ArrayLike<T> : Eq + Clone + AsRef<[T]> {
+    fn ndims(&self) -> usize {
+        self.as_ref().len()
     }
 }
+pub trait ArrayLikeMut<T> : ArrayLike<T> + AsMut<[T]> {}
 
 macro_rules! array_impl {
     ($len:expr) => (
-        impl<T> Deref for ArrayLike<[T; $len]> {
-            type Target = [T];
-            fn deref<'a>(&'a self) -> &'a [T] {
-                &self.array[..]
-            }
-        }
-
-        impl<T> DerefMut for ArrayLike<[T; $len]> {
-            fn deref_mut<'a>(&'a mut self) -> &'a mut [T] {
-                &mut self.array[..]
-            }
-        }
-
-        impl<T: Copy> Copy for ArrayLike<[T; $len]> { }
-
-        impl<T: Copy> Clone for ArrayLike<[T; $len]> {
-            fn clone(&self) -> Self {
-                *self
-            }
-        }
+        impl<T: Copy + Eq> ArrayLike<T> for [T; $len] {}
+        impl<T: Copy + Eq> ArrayLikeMut<T> for [T; $len] {}
     )
-}
-
-
-macro_rules! array_impl_recursive {
-    ($len:expr, $($more:expr,)*) => (
-        array_impl!($len);
-        array_impl_recursive!($($more,)*);
-    );
 }
 
 array_impl!(0);
