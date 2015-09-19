@@ -242,6 +242,14 @@ where DimArray: ArrayLike<usize>,
         }
     }
 
+    pub fn to_owned(&self) -> TensorOwned<N, DimArray>
+    where N: Copy {
+        TensorOwned {
+            data: self.data.to_vec(),
+            shape: self.shape(),
+            strides: self.strides(),
+        }
+    }
 
 }
 
@@ -761,9 +769,15 @@ mod tests {
     #[test]
     fn outer_block_iter_mut() {
         let mut mat: MatOwned<f64> = Tensor::eye(11);
+        let block2_ref = {
+            let mat_view = mat.borrowed();
+            mat_view.middle_outer_views(3, 3).unwrap().to_owned()
+        };
         let mut block_iter = mat.outer_block_iter_mut(3);
         assert_eq!(block_iter.next().unwrap().rows(), 3);
         let mut block2 = block_iter.next().unwrap();
         block2.row_mut(0).unwrap().data_mut()[0] = 1.;
+        assert_eq!(block2.data()[0], 1.);
+        assert_eq!(&block2.data()[1..], &block2_ref.data()[1..]);
     }
 }
