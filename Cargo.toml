@@ -15,7 +15,3 @@ keywords = ["matrix", "dense", "stride"]
 
 num = "*"
 
-[dependencies.array_like]
-
-version = "*"
-path = "array_like"

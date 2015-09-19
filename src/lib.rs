@@ -9,10 +9,10 @@ major order.
 */
 
 extern crate num;
-extern crate array_like;
 
 mod mat;
 pub mod errors;
+pub mod array_like;
 
 pub use mat::{Tensor, MatView, MatViewMut, MatOwned};
 pub use mat::{VecView, VecViewMut, VecOwned};
