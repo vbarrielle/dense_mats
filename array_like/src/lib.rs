@@ -4,13 +4,12 @@ implement Copy or Deref (even though in practice they are).
 This enables asking for arrays as a generic bound
 */
 
-use std::ops::{Index, IndexMut};
-
 pub trait ArrayLike<T> : Eq + Clone + AsRef<[T]> {
     fn ndims(&self) -> usize {
         self.as_ref().len()
     }
 }
+
 pub trait ArrayLikeMut<T> : ArrayLike<T> + AsMut<[T]> {}
 
 macro_rules! array_impl {
