@@ -87,6 +87,11 @@ where DimArray: ArrayLike<usize>,
         self.strides.clone()
     }
 
+    /// Get the strides by reference
+    pub fn strides_ref(&self) -> &[usize] {
+        self.strides.as_ref()
+    }
+
     /// Access to the tensors's data
     ///
     /// # Explanations on a matrix.
@@ -103,11 +108,15 @@ where DimArray: ArrayLike<usize>,
         self.shape.clone()
     }
 
+    /// Get the shape by reference
+    pub fn shape_ref(&self) -> &[usize] {
+        self.shape.as_ref()
+    }
 
     /// Get the storage order of this tensor
     pub fn ordering(&self) -> StorageOrder {
-        let ascending = self.strides.as_ref().windows(2).all(|w| w[0] < w[1]);
-        let descending = self.strides.as_ref().windows(2).all(|w| w[0] > w[1]);
+        let ascending = self.strides_ref().windows(2).all(|w| w[0] < w[1]);
+        let descending = self.strides_ref().windows(2).all(|w| w[0] > w[1]);
         match (ascending, descending) {
             (true, false) => StorageOrder::F,
             (false, true) => StorageOrder::C,
@@ -117,7 +126,7 @@ where DimArray: ArrayLike<usize>,
 
     /// Get the slowest varying dimension index
     pub fn outer_dim(&self) -> Option<usize> {
-        self.strides.as_ref().iter().enumerate()
+        self.strides_ref().iter().enumerate()
                            .fold(None, |max, (i, &x)| {
                                max.map_or(Some((i, x)), |(i0, x0)| {
                                    if x > x0 {
@@ -132,7 +141,7 @@ where DimArray: ArrayLike<usize>,
 
     /// Get the fastest varying dimension index
     pub fn inner_dim(&self) -> Option<usize> {
-        self.strides.as_ref().iter().enumerate()
+        self.strides_ref().iter().enumerate()
                            .fold(None, |min, (i, &x)| {
                                min.map_or(Some((i, x)), |(i0, x0)| {
                                    if x < x0 {
@@ -147,22 +156,22 @@ where DimArray: ArrayLike<usize>,
 
     /// The stride for the outer dimension
     pub fn outer_stride(&self) -> Option<usize> {
-        self.outer_dim().map(|i| self.strides.as_ref()[i])
+        self.outer_dim().map(|i| self.strides_ref()[i])
     }
 
     /// The stride for the inner dimension
     pub fn inner_stride(&self) -> Option<usize> {
-        self.inner_dim().map(|i| self.strides.as_ref()[i])
+        self.inner_dim().map(|i| self.strides_ref()[i])
     }
 
     /// The shape of the outer dimension
     pub fn outer_shape(&self) -> Option<usize> {
-        self.outer_dim().map(|i| self.shape.as_ref()[i])
+        self.outer_dim().map(|i| self.shape_ref()[i])
     }
 
     /// The stride for the inner dimension
     pub fn inner_shape(&self) -> Option<usize> {
-        self.inner_dim().map(|i| self.shape.as_ref()[i])
+        self.inner_dim().map(|i| self.shape_ref()[i])
     }
 
     /// Get a view into this tensor
