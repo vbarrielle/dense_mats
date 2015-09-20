@@ -1,21 +1,19 @@
 /*!
 
-This crate contains strided dense matrices implementations.
+This crate contains strided dense tensor implementations.
 
-Matrices are defined as a contiguous piece of memory, the data array,
-which is interpreted as a matrix stored in either column major order or row
-major order.
-
+Tensors are defined as a contiguous piece of memory, the data array,
+which is interpreted using its stride information.
 */
 
 extern crate num;
 
-mod mat;
+mod tensor;
 pub mod errors;
 pub mod array_like;
 
-pub use mat::{Tensor, MatView, MatViewMut, MatOwned};
-pub use mat::{VecView, VecViewMut, VecOwned};
+pub use tensor::{Tensor, MatView, MatViewMut, MatOwned};
+pub use tensor::{VecView, VecViewMut, VecOwned};
 
 /// Describe the storage order of a matrix.
 #[derive(PartialEq, Debug)]
