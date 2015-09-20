@@ -1,6 +1,6 @@
-///! A strided matrix implementation
+///! A strided tensor implementation
 
-use std::ops::{Deref, DerefMut, Range};
+use std::ops::{Deref, DerefMut, Range, Index, IndexMut};
 use std::iter::Map;
 use std::slice::{self, Chunks, ChunksMut};
 use num::traits::Num;
@@ -242,6 +242,13 @@ where DimArray: ArrayLike<usize>,
         }
     }
 
+    /// Index into the data array for the given N-dimensional index
+    pub fn data_index(&self, index: DimArray) -> usize {
+        index.as_ref().iter().zip(self.strides_ref())
+                      .map(|(x, y)| x * y)
+                      .fold(0, |sum, y| sum + y)
+    }
+
     pub fn to_owned(&self) -> TensorOwned<N, DimArray>
     where N: Copy {
         TensorOwned {
@@ -290,6 +297,29 @@ where DimArray: ArrayLike<usize> {
         }
     }
 }
+
+impl<N, DimArray, Storage> Index<DimArray> for Tensor<N, DimArray, Storage>
+where DimArray: ArrayLike<usize>,
+      Storage: Deref<Target=[N]> {
+
+    type Output = N;
+
+    fn index<'a>(&'a self, index: DimArray) -> &'a N {
+        let data_index = self.data_index(index);
+        &self.data[data_index]
+    }
+}
+
+impl<N, DimArray, Storage> IndexMut<DimArray> for Tensor<N, DimArray, Storage>
+where DimArray: ArrayLike<usize>,
+      Storage: DerefMut<Target=[N]> {
+
+    fn index_mut<'a>(&'a mut self, index: DimArray) -> &'a mut N {
+        let data_index = self.data_index(index);
+        &mut self.data[data_index]
+    }
+}
+
 
 pub type MatView<'a, N> = Tensor<N, [usize; 2], &'a [N]>;
 pub type MatViewMut<'a, N> = Tensor<N, [usize; 2], &'a mut [N]>;
@@ -373,33 +403,27 @@ where Storage: Deref<Target=[N]> {
         self.shape[1]
     }
 
-    /// Give the index into self.data() for accessing the element
-    /// at row i and column j
-    pub fn data_index(&self, i: usize, j: usize) -> usize {
-        i * self.strides()[0] + j * self.strides()[1]
-    }
-
     fn row_range_rowmaj(&self, i: usize) -> Range<usize> {
-        let start = self.data_index(i, 0);
-        let stop = self.data_index(i + 1, 0);
+        let start = self.data_index([i, 0]);
+        let stop = self.data_index([i + 1, 0]);
         start..stop
     }
 
     fn row_range_colmaj(&self, i: usize) -> Range<usize> {
-        let start = self.data_index(i, 0);
-        let stop = self.data_index(i + 1, self.cols() - 1);
+        let start = self.data_index([i, 0]);
+        let stop = self.data_index([i + 1, self.cols() - 1]);
         start..stop
     }
 
     fn col_range_rowmaj(&self, j: usize) -> Range<usize> {
-        let start = self.data_index(0, j);
-        let stop = self.data_index(self.rows() - 1, j + 1);
+        let start = self.data_index([0, j]);
+        let stop = self.data_index([self.rows() - 1, j + 1]);
         start..stop
     }
 
     fn col_range_colmaj(&self, j: usize) -> Range<usize> {
-        let start = self.data_index(0, j);
-        let stop = self.data_index(0, j + 1);
+        let start = self.data_index([0, j]);
+        let stop = self.data_index([0, j + 1]);
         start..stop
     }
 
@@ -538,7 +562,7 @@ where Storage: DerefMut<Target=[N]> {
     }
 }
 
-/// An iterator over non-overlapping blocks of a matrix,
+/// An iterator over non-overlapping blocks of a tensor,
 /// along the least-varying dimension
 pub struct ChunkOuterBlocks<'a, N: 'a, DimArray>
 where DimArray: ArrayLike<usize> {
@@ -779,5 +803,18 @@ mod tests {
         block2.row_mut(0).unwrap().data_mut()[0] = 1.;
         assert_eq!(block2.data()[0], 1.);
         assert_eq!(&block2.data()[1..], &block2_ref.data()[1..]);
+    }
+
+    #[test]
+    fn indexing() {
+        let mut mat: MatOwned<f64> = Tensor::eye(11);
+        assert_eq!(mat[[0,0]], 1.);
+        assert_eq!(mat[[1,1]], 1.);
+        assert_eq!(mat[[2,2]], 1.);
+        assert_eq!(mat[[3,2]], 0.);
+        assert_eq!(mat[[2,3]], 0.);
+
+        mat[[0,0]] = 2.;
+        assert_eq!(mat[[0,0]], 2.);
     }
 }
