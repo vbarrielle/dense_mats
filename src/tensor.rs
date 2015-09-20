@@ -20,6 +20,29 @@ where Storage: Deref<Target=[N]>,
     strides: DimArray,
 }
 
+fn strides_from_shape_c_order<DimArray>(shape: &DimArray) -> DimArray
+where DimArray: ArrayLikeMut<usize> {
+    let mut strides = shape.clone();
+    let mut prev = 1;
+    for (stride, &dim) in strides.as_mut().iter_mut().rev()
+                                 .zip(shape.as_ref().iter().rev()) {
+        *stride = prev;
+        prev *= dim;
+    }
+    strides
+}
+
+fn strides_from_shape_f_order<DimArray>(shape: &DimArray) -> DimArray
+where DimArray: ArrayLikeMut<usize> {
+    let mut strides = shape.clone();
+    let mut prev = 1;
+    for (stride, &dim) in strides.as_mut().iter_mut().zip(shape.as_ref()) {
+        *stride = prev;
+        prev *= dim;
+    }
+    strides
+}
+
 pub type TensorView<'a, N, DimArray> = Tensor<N, DimArray, &'a [N]>;
 pub type TensorViewMut<'a, N, DimArray> = Tensor<N, DimArray, &'a mut [N]>;
 pub type TensorOwned<N, DimArray> = Tensor<N, DimArray, Vec<N>>;
@@ -104,6 +127,47 @@ where DimArray: ArrayLikeMut<usize> {
     }
 }
 
+impl<N, DimArray> Tensor<N, DimArray, Vec<N>>
+where DimArray: ArrayLikeMut<usize> {
+
+    /// Create an all-zero tensor
+    ///
+    /// Defaults to C order if order equals Unordered
+    pub fn zeros(shape: DimArray,
+                 order: StorageOrder) -> TensorOwned<N, DimArray>
+    where N: Num + Copy {
+        let strides = match order {
+            StorageOrder::C => strides_from_shape_c_order(&shape),
+            StorageOrder::F => strides_from_shape_f_order(&shape),
+            StorageOrder::Unordered => strides_from_shape_c_order(&shape),
+        };
+        let size = shape.as_ref().iter().fold(1, |prod, x| prod * x);
+        Tensor {
+            data: vec![N::zero(); size],
+            shape: shape,
+            strides: strides,
+        }
+    }
+
+    /// Create an all-one tensor
+    ///
+    /// Defaults to C order if order equals Unordered
+    pub fn ones(shape: DimArray,
+                 order: StorageOrder) -> TensorOwned<N, DimArray>
+    where N: Num + Copy {
+        let strides = match order {
+            StorageOrder::C => strides_from_shape_c_order(&shape),
+            StorageOrder::F => strides_from_shape_f_order(&shape),
+            StorageOrder::Unordered => strides_from_shape_c_order(&shape),
+        };
+        let size = shape.as_ref().iter().fold(1, |prod, x| prod * x);
+        Tensor {
+            data: vec![N::one(); size],
+            shape: shape,
+            strides: strides,
+        }
+    }
+}
 
 /// Methods available for all tensors regardless of their dimension count
 impl<N, DimArray, Storage> Tensor<N, DimArray, Storage>
@@ -331,24 +395,6 @@ impl<N> Tensor<N, [usize; 2], Vec<N>> {
                      cols: usize, strides: [usize;2]) -> MatOwned<N> {
         Tensor {
             data: data,
-            shape: [rows, cols],
-            strides: strides,
-        }
-    }
-
-    /// Create an all-zero dense matrix
-    ///
-    /// Defaults to C order if order equals Unordered
-    pub fn zeros(rows: usize, cols: usize,
-                 order: StorageOrder) -> MatOwned<N>
-    where N: Num + Copy {
-        let strides = match order {
-            StorageOrder::C => [cols, 1],
-            StorageOrder::F => [1, rows],
-            StorageOrder::Unordered => [cols, 1]
-        };
-        Tensor {
-            data: vec![N::zero(); rows*cols],
             shape: [rows, cols],
             strides: strides,
         }
