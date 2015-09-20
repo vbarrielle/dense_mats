@@ -344,11 +344,6 @@ where DimArray: ArrayLike<usize>,
             bloc_count: 0,
         }
     }
-}
-
-/// Methods available for all tensors regardless of their dimension count
-impl<'a, N: 'a, DimArray> Tensor<N, DimArray, &'a mut [N]>
-where DimArray: ArrayLike<usize> {
 
     /// Get a mutable view into this tensor
     pub fn borrowed_mut(&mut self) -> TensorViewMut<N, DimArray> {
