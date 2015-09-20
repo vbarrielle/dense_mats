@@ -10,11 +10,13 @@ use array_like::{ArrayLike, ArrayLikeMut};
 use errors::DMatError;
 use StorageOrder;
 
+/// A type for indexing an axis of a tensor
+pub struct Axis(usize);
+
 /// A simple dense matrix
 #[derive(PartialEq, Debug)]
 pub struct Tensor<N, DimArray, Storage>
-where Storage: Deref<Target=[N]>,
-      DimArray: ArrayLike<usize> {
+where Storage: Deref<Target=[N]> {
     data: Storage,
     shape: DimArray,
     strides: DimArray,
@@ -322,6 +324,24 @@ where DimArray: ArrayLike<usize>,
         }
     }
 
+    pub fn slice_dim(&self, Axis(dim): Axis, index: usize
+                    ) -> TensorView<N, DimArray::Pred>
+    where DimArray: ArrayLikeMut<usize> {
+        let shape = self.shape.remove_val(dim);
+        let strides = self.strides.remove_val(dim);
+        let mut indexing = self.shape.clone();
+        for val in indexing.as_mut().iter_mut() {
+            *val = 0
+        }
+        indexing.as_mut()[dim] = index;
+        let data_index = self.data_index(indexing);
+        let data = &self.data[data_index..];
+        TensorView {
+            data: data,
+            shape: shape,
+            strides: strides
+        }
+    }
 }
 
 impl<N, DimArray, Storage> Tensor<N, DimArray, Storage>
@@ -353,6 +373,25 @@ where DimArray: ArrayLike<usize>,
             data: &mut self.data[..],
             shape: shape,
             strides: stride,
+        }
+    }
+
+    pub fn slice_dim_mut(&mut self, Axis(dim): Axis, index: usize
+                        ) -> TensorViewMut<N, DimArray::Pred>
+    where DimArray: ArrayLikeMut<usize> {
+        let shape = self.shape.remove_val(dim);
+        let strides = self.strides.remove_val(dim);
+        let mut indexing = self.shape.clone();
+        for val in indexing.as_mut().iter_mut() {
+            *val = 0
+        }
+        indexing.as_mut()[dim] = index;
+        let data_index = self.data_index(indexing);
+        let data = &mut self.data[data_index..];
+        TensorViewMut {
+            data: data,
+            shape: shape,
+            strides: strides
         }
     }
 }
@@ -672,7 +711,8 @@ where DimArray: ArrayLikeMut<usize> {
 #[cfg(test)]
 mod tests {
 
-    use super::{Tensor, MatOwned};
+    use super::{Tensor, MatOwned, TensorOwned, Axis};
+    use StorageOrder;
     use errors::DMatError;
 
     #[test]
@@ -857,5 +897,29 @@ mod tests {
 
         mat[[0,0]] = 2.;
         assert_eq!(mat[[0,0]], 2.);
+    }
+
+    #[test]
+    fn slice_dim() {
+        let mut tensor: TensorOwned<f64,_> = Tensor::zeros([5, 4, 3],
+                                                           StorageOrder::C);
+        tensor[[0,0,0]] = 2.;
+        {
+            let mat43_0 = tensor.slice_dim(Axis(0), 0);
+            assert_eq!(mat43_0[[0,0]], 2.);
+            let mat43_1 = tensor.slice_dim(Axis(0), 1);
+            assert_eq!(mat43_1[[0,0]], 0.);
+        }
+
+        {
+            let mut mat53_0 = tensor.slice_dim_mut(Axis(1), 0);
+            mat53_0[[4,1]] = 3.;
+        }
+        assert_eq!(tensor[[4, 0, 1]], 3.);
+        {
+            let mut mat54_1 = tensor.slice_dim_mut(Axis(2), 1);
+            mat54_1[[4,3]] = 4.;
+        }
+        assert_eq!(tensor[[4, 3, 1]], 4.);
     }
 }
