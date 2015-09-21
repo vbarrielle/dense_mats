@@ -11,6 +11,7 @@ use errors::DMatError;
 use StorageOrder;
 
 /// A type for indexing an axis of a tensor
+#[derive(PartialEq, Debug, Copy, Clone)]
 pub struct Axis(usize);
 
 /// A simple dense matrix
@@ -53,8 +54,23 @@ pub type TensorOwned<N, DimArray> = Tensor<N, DimArray, Vec<N>>;
 impl<'a, N: 'a, DimArray> Tensor<N, DimArray, &'a[N]>
 where DimArray: ArrayLikeMut<usize> {
 
+    pub fn slice_dim(&self, Axis(dim): Axis, index: usize
+                    ) -> TensorView<'a, N, DimArray::Pred>
+    where DimArray: ArrayLikeMut<usize> {
+        let shape = self.shape.remove_val(dim);
+        let strides = self.strides.remove_val(dim);
+        let mut indexing = self.shape.clone();
+        for val in indexing.as_mut().iter_mut() {
+            *val = 0
         }
+        indexing.as_mut()[dim] = index;
+        let data_index = self.data_index(indexing);
+        let data = &self.data[data_index..];
+        TensorView {
+            data: data,
             shape: shape,
+            strides: strides
+        }
     }
 }
 
@@ -263,22 +279,22 @@ where DimArray: ArrayLike<usize>,
         }
     }
 
-    pub fn slice_dim(&self, Axis(dim): Axis, index: usize
-                    ) -> TensorView<N, DimArray::Pred>
-    where DimArray: ArrayLikeMut<usize> {
-        let shape = self.shape.remove_val(dim);
-        let strides = self.strides.remove_val(dim);
-        let mut indexing = self.shape.clone();
-        for val in indexing.as_mut().iter_mut() {
-            *val = 0
+    /// Iteration on the given axis
+    pub fn iter_axis(&self, axis: Axis) -> Slices<N, DimArray> {
+        let t = TensorView {
+            data: &self.data[..],
+            shape: self.shape(),
+            strides: self.strides(),
+        };
+        Slices {
+            tensor: t,
+            axis: axis,
+            index: 0,
         }
-        indexing.as_mut()[dim] = index;
-        let data_index = self.data_index(indexing);
-        let data = &self.data[data_index..];
-        TensorView {
-            data: data,
-            shape: shape,
-            strides: strides
+    }
+
+}
+
 impl<N, DimArray, Storage> Tensor<N, DimArray, Storage>
 where DimArray: ArrayLikeMut<usize>,
       Storage: Deref<Target=[N]> {
@@ -436,7 +452,6 @@ where DimArray: ArrayLike<usize>,
         &mut self.data[data_index]
     }
 }
-
 
 pub type MatView<'a, N> = Tensor<N, [usize; 2], &'a [N]>;
 pub type MatViewMut<'a, N> = Tensor<N, [usize; 2], &'a mut [N]>;
@@ -663,15 +678,18 @@ where Storage: DerefMut<Target=[N]> {
 
 /// An iterator over non-overlapping blocks of a tensor,
 /// along the least-varying dimension
-pub struct ChunkOuterBlocks<'a, N: 'a, DimArray>
-where DimArray: ArrayLike<usize> {
-    tensor: TensorView<'a, N, DimArray>,
+pub struct ChunkOuterBlocks<'a, N: 'a, DimArray: 'a, Storage: 'a>
+where DimArray: ArrayLike<usize>,
+      Storage: Deref<Target=[N]> {
+    tensor: &'a Tensor<N, DimArray, Storage>,
     dims_in_bloc: usize,
     bloc_count: usize
 }
 
-impl<'a, N: 'a, DimArray> Iterator for ChunkOuterBlocks<'a, N, DimArray>
-where DimArray: ArrayLikeMut<usize> {
+impl<'a, N: 'a, DimArray, Storage>
+Iterator for ChunkOuterBlocks<'a, N, DimArray, Storage>
+where DimArray: ArrayLikeMut<usize>,
+      Storage: Deref<Target=[N]> {
     type Item = TensorView<'a, N, DimArray>;
     fn next(&mut self) -> Option<<Self as Iterator>::Item> {
         let cur_dim = self.dims_in_bloc * self.bloc_count;
@@ -727,6 +745,26 @@ where DimArray: ArrayLikeMut<usize>,
             self.tensor.mid_outer_views_mut(cur_dim, count).unwrap()
         };
         self.bloc_count += 1;
+        Some(view)
+    }
+}
+
+pub struct Slices<'a, N: 'a, DimArray> {
+    tensor: TensorView<'a, N, DimArray>,
+    axis: Axis,
+    index: usize,
+}
+
+impl<'a, N: 'a, DimArray> Iterator for Slices<'a, N, DimArray>
+where DimArray: ArrayLikeMut<usize> {
+    type Item = TensorView<'a, N, <DimArray as ArrayLike<usize>>::Pred>;
+    fn next(&mut self) -> Option<<Self as Iterator>::Item> {
+        let Axis(axis) = self.axis;
+        if self.index >= self.tensor.shape_ref()[axis] {
+            return None;
+        }
+        let view = self.tensor.slice_dim(self.axis, self.index);
+        self.index += 1;
         Some(view)
     }
 }
@@ -926,9 +964,9 @@ mod tests {
         let mut tensor: TensorOwned<f64,_> = Tensor::zeros([5, 4, 3]);
         tensor[[0,0,0]] = 2.;
         {
-            let mat43_0 = tensor.slice_dim(Axis(0), 0);
+            let mat43_0 = tensor.borrowed().slice_dim(Axis(0), 0);
             assert_eq!(mat43_0[[0,0]], 2.);
-            let mat43_1 = tensor.slice_dim(Axis(0), 1);
+            let mat43_1 = tensor.borrowed().slice_dim(Axis(0), 1);
             assert_eq!(mat43_1[[0,0]], 0.);
         }
 
@@ -942,5 +980,43 @@ mod tests {
             mat54_1[[4,3]] = 4.;
         }
         assert_eq!(tensor[[4, 3, 1]], 4.);
+    }
+
+    #[test]
+    fn iter_axis() {
+        let mut tensor: TensorOwned<f64,_> = Tensor::zeros([5, 4, 3]);
+        tensor[[0,0,0]] = 2.;
+        tensor[[1,1,2]] = 4.;
+        tensor[[3,2,0]] = 3.;
+
+        let mut iter0 = tensor.iter_axis(Axis(0));
+        let mat43_0 = iter0.next().unwrap();
+        assert_eq!(mat43_0[[0,0]], 2.);
+        assert_eq!(mat43_0[[1,1]], 0.);
+        let mat43_1 = iter0.next().unwrap();
+        assert_eq!(mat43_1[[0,0]], 0.);
+        assert_eq!(mat43_1[[1,1]], 0.);
+        let mat43_2 = iter0.next().unwrap();
+        assert_eq!(mat43_2[[0,0]], 0.);
+        assert_eq!(mat43_2[[1,1]], 0.);
+        let mat43_3 = iter0.next().unwrap();
+        assert_eq!(mat43_3[[0,0]], 0.);
+        assert_eq!(mat43_3[[1,1]], 0.);
+        let mat43_4 = iter0.next().unwrap();
+        assert_eq!(mat43_4[[0,0]], 0.);
+        assert_eq!(mat43_4[[1,1]], 0.);
+        assert_eq!(iter0.next(), None);
+
+        let mut iter2 = tensor.iter_axis(Axis(2));
+        let mat53_0 = iter2.next().unwrap();
+        assert_eq!(mat53_0[[3,2]], 3.);
+        assert_eq!(mat53_0[[0,0]], 2.);
+        let mat53_1 = iter2.next().unwrap();
+        assert_eq!(mat53_1[[3,2]], 0.);
+        assert_eq!(mat53_1[[0,0]], 0.);
+        let mat53_2 = iter2.next().unwrap();
+        assert_eq!(mat53_2[[3,2]], 0.);
+        assert_eq!(mat53_2[[0,0]], 0.);
+        assert_eq!(iter2.next(), None);
     }
 }
