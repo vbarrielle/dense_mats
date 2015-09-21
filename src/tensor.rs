@@ -132,17 +132,10 @@ where DimArray: ArrayLikeMut<usize> {
 impl<N, DimArray> Tensor<N, DimArray, Vec<N>>
 where DimArray: ArrayLikeMut<usize> {
 
-    /// Create an all-zero tensor
-    ///
-    /// Defaults to C order if order equals Unordered
-    pub fn zeros(shape: DimArray,
-                 order: StorageOrder) -> TensorOwned<N, DimArray>
+    /// Create an all-zero tensor in C order
+    pub fn zeros(shape: DimArray) -> TensorOwned<N, DimArray>
     where N: Num + Copy {
-        let strides = match order {
-            StorageOrder::C => strides_from_shape_c_order(&shape),
-            StorageOrder::F => strides_from_shape_f_order(&shape),
-            StorageOrder::Unordered => strides_from_shape_c_order(&shape),
-        };
+        let strides = strides_from_shape_c_order(&shape);
         let size = shape.as_ref().iter().fold(1, |prod, x| prod * x);
         Tensor {
             data: vec![N::zero(); size],
@@ -151,17 +144,34 @@ where DimArray: ArrayLikeMut<usize> {
         }
     }
 
-    /// Create an all-one tensor
-    ///
-    /// Defaults to C order if order equals Unordered
-    pub fn ones(shape: DimArray,
-                 order: StorageOrder) -> TensorOwned<N, DimArray>
+    /// Create an all-zero tensor in F order
+    pub fn zeros_f(shape: DimArray) -> TensorOwned<N, DimArray>
     where N: Num + Copy {
-        let strides = match order {
-            StorageOrder::C => strides_from_shape_c_order(&shape),
-            StorageOrder::F => strides_from_shape_f_order(&shape),
-            StorageOrder::Unordered => strides_from_shape_c_order(&shape),
-        };
+        let strides = strides_from_shape_f_order(&shape);
+        let size = shape.as_ref().iter().fold(1, |prod, x| prod * x);
+        Tensor {
+            data: vec![N::zero(); size],
+            shape: shape,
+            strides: strides,
+        }
+    }
+
+    /// Create an all-one tensor in C order
+    pub fn ones(shape: DimArray) -> TensorOwned<N, DimArray>
+    where N: Num + Copy {
+        let strides = strides_from_shape_c_order(&shape);
+        let size = shape.as_ref().iter().fold(1, |prod, x| prod * x);
+        Tensor {
+            data: vec![N::one(); size],
+            shape: shape,
+            strides: strides,
+        }
+    }
+
+    /// Create an all-one tensor in F order
+    pub fn ones_c(shape: DimArray) -> TensorOwned<N, DimArray>
+    where N: Num + Copy {
+        let strides = strides_from_shape_f_order(&shape);
         let size = shape.as_ref().iter().fold(1, |prod, x| prod * x);
         Tensor {
             data: vec![N::one(); size],
@@ -712,7 +722,6 @@ where DimArray: ArrayLikeMut<usize> {
 mod tests {
 
     use super::{Tensor, MatOwned, TensorOwned, Axis};
-    use StorageOrder;
     use errors::DMatError;
 
     #[test]
@@ -901,8 +910,7 @@ mod tests {
 
     #[test]
     fn slice_dim() {
-        let mut tensor: TensorOwned<f64,_> = Tensor::zeros([5, 4, 3],
-                                                           StorageOrder::C);
+        let mut tensor: TensorOwned<f64,_> = Tensor::zeros([5, 4, 3]);
         tensor[[0,0,0]] = 2.;
         {
             let mat43_0 = tensor.slice_dim(Axis(0), 0);
