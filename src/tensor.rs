@@ -53,80 +53,14 @@ pub type TensorOwned<N, DimArray> = Tensor<N, DimArray, Vec<N>>;
 impl<'a, N: 'a, DimArray> Tensor<N, DimArray, &'a[N]>
 where DimArray: ArrayLikeMut<usize> {
 
-    /// Slice along the least varying dimension of the matrix, from
-    /// index `start` and taking `count` vectors.
-    ///
-    /// e.g. for a row major matrix, get a view of `count` rows starting
-    /// from `start`.
-    pub fn middle_outer_views(&self,
-                              start: usize,
-                              count: usize
-                             ) -> Result<TensorView<'a, N, DimArray>,
-                                         DMatError> {
-        let end = start + count;
-        if count == 0 {
-            return Err(DMatError::EmptyView);
         }
-        let outer_shape = try!(self.outer_shape()
-                                   .ok_or(DMatError::ZeroDimTensor));
-        if start >= outer_shape || end > outer_shape {
-            return Err(DMatError::OutOfBoundsIndex);
-        }
-        let dim_index = try!(self.outer_dim().ok_or(DMatError::ZeroDimTensor));
-        let mut shape = self.shape.clone();
-        shape.as_mut()[dim_index] = count;
-
-        let s = try!(self.outer_stride().ok_or(DMatError::ZeroDimTensor));
-        let sliced_data = &self.data[start * s .. end * s];
-        Ok(TensorView {
-            data: sliced_data,
             shape: shape,
-            strides: self.strides(),
-        })
     }
 }
 
 impl<'a, N: 'a, DimArray> Tensor<N, DimArray, &'a mut [N]>
 where DimArray: ArrayLikeMut<usize> {
 
-    /// Slice mutably along the least varying dimension of the matrix, from
-    /// index `start` and taking `count` vectors.
-    ///
-    /// e.g. for a row major matrix, get a view of `count` rows starting
-    /// from `start`.
-    pub fn middle_outer_views_mut(&mut self,
-                                  start: usize,
-                                  count: usize
-                                 ) -> Result<TensorViewMut<'a, N, DimArray>,
-                                             DMatError> {
-        let end = start + count;
-        if count == 0 {
-            return Err(DMatError::EmptyView);
-        }
-        let outer_shape = try!(self.outer_shape()
-                                   .ok_or(DMatError::ZeroDimTensor));
-        if start >= outer_shape || end > outer_shape {
-            return Err(DMatError::OutOfBoundsIndex);
-        }
-        let dim_index = try!(self.outer_dim().ok_or(DMatError::ZeroDimTensor));
-        let mut shape = self.shape.clone();
-        shape.as_mut()[dim_index] = count;
-
-        let s = try!(self.outer_stride().ok_or(DMatError::ZeroDimTensor));
-        let strides = self.strides();
-
-        // safe because we already checked for out of bounds
-        let sliced_data = unsafe {
-            let ptr = self.data.as_mut_ptr();
-            slice::from_raw_parts_mut(ptr.offset((start * s) as isize),
-                                      count * s)
-        };
-        Ok(TensorViewMut {
-            data: sliced_data,
-            shape: shape,
-            strides: strides,
-        })
-    }
 }
 
 impl<N, DimArray> Tensor<N, DimArray, Vec<N>>
@@ -304,15 +238,10 @@ where DimArray: ArrayLike<usize>,
     }
 
     /// Iteration on outer blocks views of size block_size
-    pub fn outer_block_iter(&self, block_size: usize
-                           ) -> ChunkOuterBlocks<N, DimArray> {
-        let t = TensorView {
-            data: &self.data[..],
-            shape: self.shape(),
-            strides: self.strides(),
-        };
+    pub fn outer_block_iter<'a>(&'a self, block_size: usize
+                               ) -> ChunkOuterBlocks<'a, N, DimArray, Storage> {
         ChunkOuterBlocks {
-            tensor: t,
+            tensor: &self,
             dims_in_bloc: block_size,
             bloc_count: 0,
         }
@@ -350,26 +279,54 @@ where DimArray: ArrayLike<usize>,
             data: data,
             shape: shape,
             strides: strides
+impl<N, DimArray, Storage> Tensor<N, DimArray, Storage>
+where DimArray: ArrayLikeMut<usize>,
+      Storage: Deref<Target=[N]> {
+    /// Slice along the least varying dimension of the matrix, from
+    /// index `start` and taking `count` vectors.
+    ///
+    /// e.g. for a row major matrix, get a view of `count` rows starting
+    /// from `start`.
+    pub fn middle_outer_views<'a>(&'a self,
+                                  start: usize,
+                                  count: usize
+                                 ) -> Result<TensorView<'a, N, DimArray>,
+                                             DMatError> {
+        let end = start + count;
+        if count == 0 {
+            return Err(DMatError::EmptyView);
         }
+        let outer_shape = try!(self.outer_shape()
+                                   .ok_or(DMatError::ZeroDimTensor));
+        if start >= outer_shape || end > outer_shape {
+            return Err(DMatError::OutOfBoundsIndex);
+        }
+        let dim_index = try!(self.outer_dim().ok_or(DMatError::ZeroDimTensor));
+        let mut shape = self.shape.clone();
+        shape.as_mut()[dim_index] = count;
+
+        let s = try!(self.outer_stride().ok_or(DMatError::ZeroDimTensor));
+        let sliced_data = &self.data[start * s .. end * s];
+        Ok(TensorView {
+            data: sliced_data,
+            shape: shape,
+            strides: self.strides(),
+        })
     }
+
 }
 
+
 impl<N, DimArray, Storage> Tensor<N, DimArray, Storage>
-where DimArray: ArrayLike<usize>,
+where DimArray: ArrayLikeMut<usize>,
       Storage: DerefMut<Target=[N]> {
 
     /// Iteration on mutable outer blocks views of size block_size
-    pub fn outer_block_iter_mut(&mut self, block_size: usize
-                               ) -> ChunkOuterBlocksMut<N, DimArray> {
-        let shape = self.shape();
-        let strides = self.strides();
-        let t = TensorViewMut {
-            data: &mut self.data[..],
-            shape: shape,
-            strides: strides,
-        };
+    pub fn outer_block_iter_mut<'a>(&'a mut self, block_size: usize
+                                   ) -> ChunkOuterBlocksMut<'a, N,
+                                                            DimArray, Storage> {
         ChunkOuterBlocksMut {
-            tensor: t,
+            tensor: self,
             dims_in_bloc: block_size,
             bloc_count: 0,
         }
@@ -403,6 +360,58 @@ where DimArray: ArrayLike<usize>,
             shape: shape,
             strides: strides
         }
+    }
+
+    /// Slice mutably along the least varying dimension of the matrix, from
+    /// index `start` and taking `count` vectors.
+    ///
+    /// e.g. for a row major matrix, get a view of `count` rows starting
+    /// from `start`.
+    pub fn middle_outer_views_mut<'a>(&'a mut self,
+                                      start: usize,
+                                      count: usize
+                                     ) -> Result<TensorViewMut<'a, N, DimArray>,
+                                                 DMatError> {
+        let end = start + count;
+        if count == 0 {
+            return Err(DMatError::EmptyView);
+        }
+        let outer_shape = try!(self.outer_shape()
+                                   .ok_or(DMatError::ZeroDimTensor));
+        if start >= outer_shape || end > outer_shape {
+            return Err(DMatError::OutOfBoundsIndex);
+        }
+        unsafe {
+            self.mid_outer_views_mut(start, count)
+        }
+    }
+
+    /// Core unsafe implementation of middle_outer_views_mut()
+    /// Bounds checking should have been performed before
+    unsafe fn mid_outer_views_mut<'a>(&mut self,
+                                      start: usize,
+                                      count: usize
+                                     ) -> Result<TensorViewMut<'a, N, DimArray>,
+                                                 DMatError>
+    where N: 'a {
+        let dim_index = try!(self.outer_dim().ok_or(DMatError::ZeroDimTensor));
+        let mut shape = self.shape.clone();
+        shape.as_mut()[dim_index] = count;
+
+        let s = try!(self.outer_stride().ok_or(DMatError::ZeroDimTensor));
+        let strides = self.strides();
+
+        // safe because we already checked for out of bounds
+        let sliced_data = {
+            let ptr = self.data.as_mut_ptr();
+            slice::from_raw_parts_mut(ptr.offset((start * s) as isize),
+                                      count * s)
+        };
+        Ok(TensorViewMut {
+            data: sliced_data,
+            shape: shape,
+            strides: strides,
+        })
     }
 }
 
@@ -687,15 +696,18 @@ where DimArray: ArrayLikeMut<usize> {
 
 /// An iterator over non-overlapping mutable blocks of a matrix,
 /// along the least-varying dimension
-pub struct ChunkOuterBlocksMut<'a, N: 'a, DimArray>
-where DimArray: ArrayLike<usize> {
-    tensor: TensorViewMut<'a, N, DimArray>,
+pub struct ChunkOuterBlocksMut<'a, N: 'a, DimArray: 'a, Storage: 'a>
+where DimArray: ArrayLike<usize>,
+      Storage: DerefMut<Target=[N]> {
+    tensor: &'a mut Tensor<N, DimArray, Storage>,
     dims_in_bloc: usize,
     bloc_count: usize
 }
 
-impl<'a, N: 'a, DimArray> Iterator for ChunkOuterBlocksMut<'a, N, DimArray>
-where DimArray: ArrayLikeMut<usize> {
+impl<'a, N: 'a, DimArray, Storage>
+Iterator for ChunkOuterBlocksMut<'a, N, DimArray, Storage>
+where DimArray: ArrayLikeMut<usize>,
+      Storage: DerefMut<Target=[N]> {
     type Item = TensorViewMut<'a, N, DimArray>;
     fn next(&mut self) -> Option<<Self as Iterator>::Item> {
         let cur_dim = self.dims_in_bloc * self.bloc_count;
@@ -711,8 +723,9 @@ where DimArray: ArrayLikeMut<usize> {
         else {
             self.dims_in_bloc
         };
-        let view = self.tensor.middle_outer_views_mut(cur_dim,
-                                                  count).unwrap();
+        let view = unsafe {
+            self.tensor.mid_outer_views_mut(cur_dim, count).unwrap()
+        };
         self.bloc_count += 1;
         Some(view)
     }
