@@ -54,24 +54,6 @@ pub type TensorOwned<N, DimArray> = Tensor<N, DimArray, Vec<N>>;
 impl<'a, N: 'a, DimArray> Tensor<N, DimArray, &'a[N]>
 where DimArray: ArrayLikeMut<usize> {
 
-    pub fn slice_dim(&self, Axis(dim): Axis, index: usize
-                    ) -> TensorView<'a, N, DimArray::Pred>
-    where DimArray: ArrayLikeMut<usize> {
-        let shape = self.shape.remove_val(dim);
-        let strides = self.strides.remove_val(dim);
-        let mut indexing = self.shape.clone();
-        for val in indexing.as_mut().iter_mut() {
-            *val = 0
-        }
-        indexing.as_mut()[dim] = index;
-        let data_index = self.data_index(indexing);
-        let data = &self.data[data_index..];
-        TensorView {
-            data: data,
-            shape: shape,
-            strides: strides
-        }
-    }
 }
 
 impl<'a, N: 'a, DimArray> Tensor<N, DimArray, &'a mut [N]>
@@ -280,16 +262,31 @@ where DimArray: ArrayLike<usize>,
     }
 
     /// Iteration on the given axis
-    pub fn iter_axis(&self, axis: Axis) -> Slices<N, DimArray> {
-        let t = TensorView {
-            data: &self.data[..],
-            shape: self.shape(),
-            strides: self.strides(),
-        };
+    pub fn iter_axis<'a>(&'a self, axis: Axis
+                        ) -> Slices<'a, N, DimArray, Storage> {
         Slices {
-            tensor: t,
+            tensor: self,
             axis: axis,
             index: 0,
+        }
+    }
+
+    pub fn slice_dim<'a>(&'a self, Axis(dim): Axis, index: usize
+                        ) -> TensorView<'a, N, DimArray::Pred>
+    where DimArray: ArrayLikeMut<usize> {
+        let shape = self.shape.remove_val(dim);
+        let strides = self.strides.remove_val(dim);
+        let mut indexing = self.shape.clone();
+        for val in indexing.as_mut().iter_mut() {
+            *val = 0
+        }
+        indexing.as_mut()[dim] = index;
+        let data_index = self.data_index(indexing);
+        let data = &self.data[data_index..];
+        TensorView {
+            data: data,
+            shape: shape,
+            strides: strides
         }
     }
 
@@ -749,14 +746,16 @@ where DimArray: ArrayLikeMut<usize>,
     }
 }
 
-pub struct Slices<'a, N: 'a, DimArray> {
-    tensor: TensorView<'a, N, DimArray>,
+pub struct Slices<'a, N: 'a, DimArray: 'a, Storage: 'a>
+where Storage: Deref<Target=[N]> {
+    tensor: &'a Tensor<N, DimArray, Storage>,
     axis: Axis,
     index: usize,
 }
 
-impl<'a, N: 'a, DimArray> Iterator for Slices<'a, N, DimArray>
-where DimArray: ArrayLikeMut<usize> {
+impl<'a, N: 'a, DimArray, Storage> Iterator for Slices<'a, N, DimArray, Storage>
+where DimArray: ArrayLikeMut<usize>,
+      Storage: Deref<Target=[N]> {
     type Item = TensorView<'a, N, <DimArray as ArrayLike<usize>>::Pred>;
     fn next(&mut self) -> Option<<Self as Iterator>::Item> {
         let Axis(axis) = self.axis;
@@ -964,9 +963,9 @@ mod tests {
         let mut tensor: TensorOwned<f64,_> = Tensor::zeros([5, 4, 3]);
         tensor[[0,0,0]] = 2.;
         {
-            let mat43_0 = tensor.borrowed().slice_dim(Axis(0), 0);
+            let mat43_0 = tensor.slice_dim(Axis(0), 0);
             assert_eq!(mat43_0[[0,0]], 2.);
-            let mat43_1 = tensor.borrowed().slice_dim(Axis(0), 1);
+            let mat43_1 = tensor.slice_dim(Axis(0), 1);
             assert_eq!(mat43_1[[0,0]], 0.);
         }
 
