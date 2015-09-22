@@ -271,6 +271,8 @@ where DimArray: ArrayLike<usize>,
         }
     }
 
+    /// Get a view as a tensor of lower dimension count, by
+    /// slicing into the given axis at the given index
     pub fn slice_dim<'a>(&'a self, Axis(dim): Axis, index: usize
                         ) -> TensorView<'a, N, DimArray::Pred>
     where DimArray: ArrayLikeMut<usize> {
@@ -356,8 +358,10 @@ where DimArray: ArrayLikeMut<usize>,
         }
     }
 
-    pub fn slice_dim_mut(&mut self, Axis(dim): Axis, index: usize
-                        ) -> TensorViewMut<N, DimArray::Pred>
+    /// Get a mutable view as a tensor of lower dimension count, by
+    /// slicing into the given axis at the given index
+    pub fn slice_dim_mut<'a>(&'a mut self, Axis(dim): Axis, index: usize
+                            ) -> TensorViewMut<'a, N, DimArray::Pred>
     where DimArray: ArrayLikeMut<usize> {
         let shape = self.shape.remove_val(dim);
         let strides = self.strides.remove_val(dim);
@@ -372,6 +376,41 @@ where DimArray: ArrayLikeMut<usize>,
             data: data,
             shape: shape,
             strides: strides
+        }
+    }
+
+    /// Unsafe version of slice_dim_mut for mutable iteration
+    unsafe fn slice_dim_mut_raw<'a>(&mut self,
+                                    Axis(dim): Axis, index: usize
+                                   ) -> TensorViewMut<'a, N, DimArray::Pred>
+    where N: 'a {
+        let shape = self.shape.remove_val(dim);
+        let strides = self.strides.remove_val(dim);
+        let mut indexing = self.shape.clone();
+        for val in indexing.as_mut().iter_mut() {
+            *val = 0
+        }
+        indexing.as_mut()[dim] = index;
+        let data_index = self.data_index(indexing);
+        let nb_elems = self.data.len() - data_index;
+        let data = {
+            let ptr = self.data.as_mut_ptr();
+            slice::from_raw_parts_mut(ptr.offset(data_index as isize),
+                                      nb_elems)
+        };
+        TensorViewMut {
+            data: data,
+            shape: shape,
+            strides: strides
+        }
+    }
+
+    pub fn iter_axis_mut<'a>(&'a mut self, axis: Axis
+                            ) -> SlicesMut<'a, N, DimArray, Storage> {
+        SlicesMut {
+            tensor: self,
+            axis: axis,
+            index: 0,
         }
     }
 
@@ -753,7 +792,8 @@ where Storage: Deref<Target=[N]> {
     index: usize,
 }
 
-impl<'a, N: 'a, DimArray, Storage> Iterator for Slices<'a, N, DimArray, Storage>
+impl<'a, N: 'a, DimArray, Storage>
+Iterator for Slices<'a, N, DimArray, Storage>
 where DimArray: ArrayLikeMut<usize>,
       Storage: Deref<Target=[N]> {
     type Item = TensorView<'a, N, <DimArray as ArrayLike<usize>>::Pred>;
@@ -763,6 +803,31 @@ where DimArray: ArrayLikeMut<usize>,
             return None;
         }
         let view = self.tensor.slice_dim(self.axis, self.index);
+        self.index += 1;
+        Some(view)
+    }
+}
+
+pub struct SlicesMut<'a, N: 'a, DimArray: 'a, Storage: 'a>
+where Storage: DerefMut<Target=[N]> {
+    tensor: &'a mut Tensor<N, DimArray, Storage>,
+    axis: Axis,
+    index: usize,
+}
+
+impl<'a, N: 'a, DimArray, Storage>
+Iterator for SlicesMut<'a, N, DimArray, Storage>
+where DimArray: ArrayLikeMut<usize>,
+      Storage: DerefMut<Target=[N]> {
+    type Item = TensorViewMut<'a, N, <DimArray as ArrayLike<usize>>::Pred>;
+    fn next(&mut self) -> Option<<Self as Iterator>::Item> {
+        let Axis(axis) = self.axis;
+        if self.index >= self.tensor.shape_ref()[axis] {
+            return None;
+        }
+        let view = unsafe {
+            self.tensor.slice_dim_mut_raw(self.axis, self.index)
+        };
         self.index += 1;
         Some(view)
     }
@@ -1017,5 +1082,22 @@ mod tests {
         assert_eq!(mat53_2[[3,2]], 0.);
         assert_eq!(mat53_2[[0,0]], 0.);
         assert_eq!(iter2.next(), None);
+    }
+
+    #[test]
+    fn iter_axis_mut() {
+        let mut tensor: TensorOwned<f64,_> = Tensor::zeros([5, 4, 3]);
+        {
+            let mut iter0 = tensor.iter_axis_mut(Axis(0));
+            let mut mat43_0 = iter0.next().unwrap();
+            mat43_0[[0,0]] = 2.;
+        }
+        {
+            let mut iter1 = tensor.iter_axis_mut(Axis(1));
+            let mut mat53_0 = iter1.next().unwrap();
+            mat53_0[[1,0]] = 3.;
+        }
+        assert_eq!(tensor[[0,0,0]], 2.);
+        assert_eq!(tensor[[1,0,0]], 3.);
     }
 }
