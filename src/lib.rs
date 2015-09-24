@@ -8,7 +8,7 @@ which is interpreted using its stride information.
 
 extern crate num;
 
-mod tensor;
+pub mod tensor;
 pub mod errors;
 pub mod array_like;
 
