@@ -12,7 +12,7 @@ use StorageOrder;
 
 /// A type for indexing an axis of a tensor
 #[derive(PartialEq, Debug, Copy, Clone)]
-pub struct Axis(usize);
+pub struct Axis(pub usize);
 
 /// A simple dense matrix
 #[derive(PartialEq, Debug)]
