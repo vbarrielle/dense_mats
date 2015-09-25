@@ -1,7 +1,7 @@
 ///! A strided tensor implementation
 
 use std::ops::{Deref, DerefMut, Range, Index, IndexMut};
-use std::iter::Map;
+use std::iter::{Map, Take};
 use std::slice::{self, Chunks, ChunksMut};
 use num::traits::Num;
 
@@ -683,8 +683,8 @@ impl<N, Storage> Tensor<N, [usize;1], Storage>
 where Storage: Deref<Target=[N]> {
 
     /// Iterate over a dense vector's values by reference
-    pub fn iter(&self) -> Map<Chunks<N>, fn(&[N]) -> &N> {
-        self.data.chunks(self.stride()).map(take_first)
+    pub fn iter(&self) -> Map<Take<Chunks<N>>, fn(&[N]) -> &N> {
+        self.data.chunks(self.stride()).take(self.dim()).map(take_first)
     }
 
     /// The number of dimensions
@@ -702,8 +702,12 @@ impl<N, Storage> Tensor<N, [usize;1], Storage>
 where Storage: DerefMut<Target=[N]> {
 
     /// Iterate over a dense vector's values by mutable reference
-    pub fn iter_mut(&mut self) -> Map<ChunksMut<N>, fn(&mut [N]) -> &mut N> {
-        self.data.chunks_mut(self.strides[0]).map(take_first_mut)
+    pub fn iter_mut(&mut self
+                   ) -> Map<Take<ChunksMut<N>>, fn(&mut [N]) -> &mut N> {
+        let count = self.dim();
+        self.data.chunks_mut(self.strides[0]).take(count)
+                                             .map(take_first_mut)
+                                             
     }
 
     /// The underlying data as a mutable slice
