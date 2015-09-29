@@ -165,6 +165,41 @@ where DimArray: ArrayLike<usize>,
         self.shape.as_ref()
     }
 
+    /// Get the stride between elements of the fastest varying dimension
+    pub fn stride_min(&self) -> usize {
+        if let Some(&min) = self.strides_ref().iter().min() {
+            min
+        }
+        else {
+            // zero-dim array, 1 seems an appropriate edge case
+            // as a 0 stride makes no sense.
+            1
+        }
+    }
+
+    /// Returns true if the array is contiguous, ie the fastest varying
+    /// axis has stride 1, and no unused data is present in the array
+    pub fn is_contiguous(&self) -> bool {
+        if self.stride_min() != 1 {
+            return false;
+        }
+        if let Some(outer_dim_index) = self.outer_dim() {
+            let strides_prod = self.strides_ref().iter().fold(1, |p, x| x * p);
+            let dim_prod = self.shape_ref().iter().enumerate()
+                                                  .fold(1, |p, (i, x)| {
+                if i == outer_dim_index {
+                    p
+                }
+                else {
+                    x * p
+                }
+            });
+            return strides_prod == dim_prod;
+        }
+        // only reached for zero dim tensor, so always true
+        return true;
+    }
+
     /// Get the storage order of this tensor
     pub fn ordering(&self) -> StorageOrder {
         let ascending = self.strides_ref().windows(2).all(|w| w[0] < w[1]);
