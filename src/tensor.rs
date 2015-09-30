@@ -1179,4 +1179,28 @@ mod tests {
         assert!(tensor.is_nearly_contiguous());
         assert!(tensor.is_contiguous());
     }
+
+    #[test]
+    fn diagonal() {
+        let tensor: TensorOwned<f64,_> = Tensor::zeros([5, 4, 3]);
+        let diag = tensor.diag_view();
+        assert_eq!(diag.dim(), 3);
+        for (l, r) in diag.iter().zip([0., 0., 0.].iter()) {
+            assert_eq!(l, r);
+        }
+
+        let mut e: MatOwned<f64> = MatOwned::eye(5);
+        {
+            let diag = e.diag_view();
+            assert_eq!(diag.dim(), 5);
+            for (l, r) in diag.iter().zip([1., 1., 1., 1., 1.].iter()) {
+                assert_eq!(l, r);
+            }
+        }
+        let mut diag = e.diag_view_mut();
+        diag[[0]] = 2.;
+        for (l, r) in diag.iter().zip([2., 1., 1., 1., 1.].iter()) {
+            assert_eq!(l, r);
+        }
+    }
 }
