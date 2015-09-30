@@ -118,6 +118,11 @@ impl<N, DimArray, Storage> Tensor<N, DimArray, Storage>
 where DimArray: ArrayLike<usize>,
       Storage: Deref<Target=[N]> {
 
+    /// The number of dimensions of this tensor
+    pub fn ndims(&self) -> usize {
+        self.strides.as_ref().len()
+    }
+
     /// The strides of the tensor.
     ///
     /// # Explanations on a matrix.
@@ -165,39 +170,34 @@ where DimArray: ArrayLike<usize>,
         self.shape.as_ref()
     }
 
-    /// Get the stride between elements of the fastest varying dimension
-    pub fn stride_min(&self) -> usize {
-        if let Some(&min) = self.strides_ref().iter().min() {
-            min
-        }
-        else {
-            // zero-dim array, 1 seems an appropriate edge case
-            // as a 0 stride makes no sense.
-            1
-        }
-    }
-
     /// Returns true if the array is contiguous, ie the fastest varying
     /// axis has stride 1, and no unused data is present in the array
     pub fn is_contiguous(&self) -> bool {
-        if self.stride_min() != 1 {
-            return false;
+        let stride = self.inner_stride();
+        stride.is_none() || (stride.unwrap() == 1
+                             && self.is_nearly_contiguous())
+    }
+
+    /// Checks whether all dimensions except the fastest varying one
+    /// are contiguous. Having that property verified allows flattened
+    /// views of the tensor using `ravel()`. Otherwise copies have to be done.
+    pub fn is_nearly_contiguous(&self) -> bool {
+        if self.ndims() == 0 {
+            return true;
         }
-        if let Some(outer_dim_index) = self.outer_dim() {
-            let strides_prod = self.strides_ref().iter().fold(1, |p, x| x * p);
-            let dim_prod = self.shape_ref().iter().enumerate()
-                                                  .fold(1, |p, (i, x)| {
-                if i == outer_dim_index {
-                    p
-                }
-                else {
-                    x * p
-                }
-            });
-            return strides_prod == dim_prod;
-        }
-        // only reached for zero dim tensor, so always true
-        return true;
+        let outer_dim_index = self.outer_dim().unwrap();
+        let outer_stride = self.outer_stride().unwrap();
+        let inner_stride = self.inner_stride().unwrap();
+        let dim_prod = self.shape_ref().iter().enumerate()
+                                              .fold(1, |p, (i, x)| {
+            if i == outer_dim_index {
+                p
+            }
+            else {
+                x * p
+            }
+        });
+        (outer_stride / inner_stride) == dim_prod
     }
 
     /// Get the storage order of this tensor
@@ -1171,5 +1171,12 @@ mod tests {
         }
         assert_eq!(tensor[[0,0,0]], 2.);
         assert_eq!(tensor[[1,0,0]], 3.);
+    }
+
+    #[test]
+    fn contiguity() {
+        let tensor: TensorOwned<f64,_> = Tensor::zeros([5, 4, 3]);
+        assert!(tensor.is_nearly_contiguous());
+        assert!(tensor.is_contiguous());
     }
 }
