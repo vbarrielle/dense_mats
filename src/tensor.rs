@@ -327,6 +327,22 @@ where DimArray: ArrayLike<usize>,
         }
     }
 
+    /// Get a view over the tensor's diagonal
+    ///
+    /// The diagonal vector is as long as the smallest dimension.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the tensor is zero-dim.
+    pub fn diag_view(&self) -> TensorView<N, [usize; 1]> {
+        let strides = [self.strides_ref().iter().fold(0, |sum, x| sum + x)];
+        let shape = [*self.shape_ref().iter().min().unwrap()];
+        TensorView {
+            data: &self.data[..],
+            shape: shape,
+            strides: strides,
+        }
+    }
 }
 
 impl<N, DimArray, Storage> Tensor<N, DimArray, Storage>
@@ -499,6 +515,23 @@ where DimArray: ArrayLikeMut<usize>,
             shape: shape,
             strides: strides,
         })
+    }
+
+    /// Get a mutable view over the tensor's diagonal
+    ///
+    /// The diagonal vector is as long as the smallest dimension.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the tensor is zero-dim.
+    pub fn diag_view_mut(&mut self) -> TensorViewMut<N, [usize; 1]> {
+        let strides = [self.strides_ref().iter().fold(0, |sum, x| sum + x)];
+        let shape = [*self.shape_ref().iter().min().unwrap()];
+        TensorViewMut {
+            data: &mut self.data[..],
+            shape: shape,
+            strides: strides,
+        }
     }
 }
 
