@@ -175,13 +175,13 @@ where DimArray: ArrayLike<usize>,
     pub fn is_contiguous(&self) -> bool {
         let stride = self.inner_stride();
         stride.is_none() || (stride.unwrap() == 1
-                             && self.is_nearly_contiguous())
+                             && self.can_ravel())
     }
 
     /// Checks whether all dimensions except the fastest varying one
     /// are contiguous. Having that property verified allows flattened
     /// views of the tensor using `ravel()`. Otherwise copies have to be done.
-    pub fn is_nearly_contiguous(&self) -> bool {
+    pub fn can_ravel(&self) -> bool {
         if self.ndims() == 0 {
             return true;
         }
@@ -337,6 +337,27 @@ where DimArray: ArrayLike<usize>,
     pub fn diag_view(&self) -> TensorView<N, [usize; 1]> {
         let strides = [self.strides_ref().iter().fold(0, |sum, x| sum + x)];
         let shape = [*self.shape_ref().iter().min().unwrap()];
+        TensorView {
+            data: &self.data[..],
+            shape: shape,
+            strides: strides,
+        }
+    }
+
+    /// Get a flattened view of the tensor
+    /// 
+    /// This only works if the tensor verifies `can_ravel()`
+    /// 
+    /// # Panics
+    ///
+    /// If the tensor is not contiguous over all dimensions except the
+    /// fastest varying one
+    /// 
+    /// On zero-dim tensors
+    pub fn ravel(&self) -> TensorView<N, [usize; 1]> {
+        let strides = [self.inner_stride()
+                           .expect("cannot ravel zero dim tensors")];
+        let shape = [self.shape_ref().iter().fold(1, |prod, x| prod * x)];
         TensorView {
             data: &self.data[..],
             shape: shape,
@@ -1176,7 +1197,7 @@ mod tests {
     #[test]
     fn contiguity() {
         let tensor: TensorOwned<f64,_> = Tensor::zeros([5, 4, 3]);
-        assert!(tensor.is_nearly_contiguous());
+        assert!(tensor.can_ravel());
         assert!(tensor.is_contiguous());
     }
 
@@ -1201,6 +1222,17 @@ mod tests {
         diag[[0]] = 2.;
         for (l, r) in diag.iter().zip([2., 1., 1., 1., 1.].iter()) {
             assert_eq!(l, r);
+        }
+    }
+
+    #[test]
+    fn ravel() {
+        let tensor: TensorOwned<f64,_> = Tensor::zeros([5, 4, 3]);
+        let flat = tensor.ravel();
+        assert_eq!(flat.dim(), 60);
+        assert_eq!(flat.stride(), 1);
+        for &x in flat.iter() {
+            assert_eq!(x, 0.);
         }
     }
 }
