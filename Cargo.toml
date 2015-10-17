@@ -13,5 +13,5 @@ keywords = ["matrix", "vector", "tensor", "ndarray", "dense"]
 
 [dependencies]
 
-num = "0.1.27
+num = "0.1.27"
 
