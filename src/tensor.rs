@@ -101,7 +101,7 @@ where DimArray: ArrayLikeMut<usize> {
     }
 
     /// Create an all-one tensor in F order
-    pub fn ones_c(shape: DimArray) -> TensorOwned<N, DimArray>
+    pub fn ones_f(shape: DimArray) -> TensorOwned<N, DimArray>
     where N: Num + Copy {
         let strides = strides_from_shape_f_order(&shape);
         let size = shape.as_ref().iter().fold(1, |prod, x| prod * x);
